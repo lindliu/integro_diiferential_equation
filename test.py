@@ -313,7 +313,7 @@ for itr in range(1,100):
         
         loss = loss_mse
         # loss = loss_diff + loss_mse# + .01*loss_sum
-        print(f'loss_diff: {loss_diff.item():.3e}, loss_mse: {loss_mse.item():.3e}, beta:{func.beta:.2f}, gamma:{func.gamma:.2f}')
+        print(f'loss_diff: {loss_diff.item():.3e}, loss_mse: {loss_mse.item():.3e}, beta:{func.beta.item():.2f}, gamma:{func.gamma.item():.2f}')
         loss.backward()
         return loss
     optimizer.step(closure)
@@ -334,8 +334,8 @@ fig, ax = plt.subplots(1,2,figsize=[12,4])
 ax[0].plot(pred_y[jj,:,:].cpu().detach(), label=['predict S', 'predict I', 'predict R'])
 ax[0].plot(batch_y[jj,:,:].cpu(), label=['S', 'I', 'R'])
 ax[0].plot([],'.',label=f'MSE: {((batch_y-pred_y)**2).mean().item():.2e}')
-ax[0].plot([],'.',label=f'beta(1.5): {func.beta:.2f}')
-ax[0].plot([],'.',label=f'gamma(1): {func.gamma:.2f}')
+ax[0].plot([],'.',label=f'beta(1.5): {func.beta.item():.2f}')
+ax[0].plot([],'.',label=f'gamma(1): {func.gamma.item():.2f}')
 ax[0].legend()
 
 ax[1].plot(func.me.cpu().detach()*func.dt.cpu(), label='predict dist')
@@ -372,8 +372,8 @@ fig, ax = plt.subplots(1,2,figsize=[12,4])
 ax[0].plot(pred_y[jj,:,:].cpu().detach(), label=['predict S', 'predict I', 'predict R'])
 ax[0].plot(test_y[jj,:,:].cpu(), label=['S', 'I', 'R'])
 ax[0].plot([],'.',label=f'MSE: {((test_y-pred_y)**2).mean().item():.2e}')
-ax[0].plot([],'.',label=f'beta(1.5): {func.beta:.2f}')
-ax[0].plot([],'.',label=f'gamma(1): {func.gamma:.2f}')
+ax[0].plot([],'.',label=f'beta(1.5): {func.beta.item():.2f}')
+ax[0].plot([],'.',label=f'gamma(1): {func.gamma.item():.2f}')
 ax[0].legend()
 
 ax[1].plot(func.me.cpu().detach()*func.dt.cpu(), label='predict dist')
