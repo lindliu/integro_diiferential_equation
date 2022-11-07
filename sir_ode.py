@@ -153,6 +153,51 @@ np.save('test_sir.npy', SIR_batch)
 
 
 
+def f_SIR(y, t, l=1, beta=1.5, gamma=1):
+    pre = y[-l:,1]
+    integro = sum(pre*dist[-l:,0])
+    
+    S, I, R = y[-1]
+    
+    dSdt = -beta * S * I + integro
+    dIdt = beta * S * I - gamma * I
+    dRdt = gamma * I - integro
+    return np.array([[dSdt, dIdt, dRdt]])
+
+
+
+import scipy.stats as stats 
+length = 1000
+t = np.linspace(0., 80., length)
+
+dist = stats.gamma.pdf(t, a=2, scale=1.2)
+dist = dist[::-1].reshape(-1,1)
+
+dx = t[1]-t[0]
+dist = dist*dx
+
+plt.figure()
+plt.plot(dist)
+
+
+dt = dx
+
+SIR_f = np.zeros([length,3])
+S0 = np.random.rand()*.2+.8  # S0 in [0.8, 1]
+I0 = np.random.rand()*.05    # I0 in [ 0 , 0.05]
+R0 = 1-S0-I0
+SIR_f[0,:] = np.array([[1, 0.001, 0]])
+# SIR_f[0,:] = np.array([[S0, I0, R0]])
+
+for i in range(length-1):
+    SIR_f[[i+1]] = SIR_f[[i]] + f_SIR(SIR_f[:i+1,:], t, i+1, beta, gamma)*dt
+    
+plt.figure()
+plt.plot(SIR_f, label=['s','i','r'])
+plt.legend()
+
+
+
 
 
 
