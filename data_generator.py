@@ -110,7 +110,7 @@ plt.figure()
 plt.plot(SIR_batch[0], label=['s','i','r'])
 plt.legend()
 
-np.save('train_sir.npy', SIR_batch)
+np.save('./data/train_sir.npy', SIR_batch)
 
 
 
@@ -139,7 +139,7 @@ plt.figure()
 plt.plot(SIR_batch[0], label=['s','i','r'])
 plt.legend()
 
-np.save('test_sir.npy', SIR_batch)
+np.save('./data/test_sir.npy', SIR_batch)
 
 
 

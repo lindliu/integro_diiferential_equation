@@ -144,10 +144,10 @@ class ODEFunc(nn.Module):
         self.funcI = funcI().to(device)
         
         
-        # self.beta = 1.5#nn.Parameter(torch.tensor(0.1).cuda(), requires_grad=True)
-        # self.gamma = 1#nn.Parameter(torch.tensor(0.1).cuda(), requires_grad=True)
-        self.beta = nn.Parameter(torch.tensor(0.2).cuda(), requires_grad=True)  ## initial value matters, if we choose 1.5 then it fails
-        self.gamma = nn.Parameter(torch.tensor(0.2).cuda(), requires_grad=True)
+        # self.beta = 1.5#nn.Parameter(torch.tensor(0.1).to(device), requires_grad=True)
+        # self.gamma = 1#nn.Parameter(torch.tensor(0.1).to(device), requires_grad=True)
+        self.beta = nn.Parameter(torch.tensor(0.2).to(device), requires_grad=True)  ## initial value matters, if we choose 1.5 then it fails
+        self.gamma = nn.Parameter(torch.tensor(0.2).to(device), requires_grad=True)
         
         # self.dx = 0.40578396351620016
     def forward(self, t, y):
@@ -240,7 +240,7 @@ plt.plot(results[0,:,:].cpu().detach())
 
 
 import numpy as np
-traindata = np.load('train_sir.npy')
+traindata = np.load('./data/train_sir.npy')
 
 
 
@@ -357,7 +357,7 @@ plt.plot(diff_num[jj].cpu())
 
 
 
-testdata = np.load('test_sir.npy')
+testdata = np.load('./data/test_sir.npy')
 
 test_y = torch.tensor(testdata[:,:200//k,:], dtype=torch.float32).to(device)
 test_y0 = test_y[:,[0],:].to(device)
