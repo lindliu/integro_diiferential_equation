@@ -12,12 +12,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from _impl import odeint
+# from _impl_origin import odeint
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-data = np.load('sir.npy')
+data = np.load('./data/train_sir.npy')
 # plt.plot(data)
 
 
@@ -154,24 +156,25 @@ if __name__ == '__main__':
     y = torch.tensor(data, dtype=torch.float32).to(device)  
     y0 = y[[0,1],:].to(device)
     
-    # pred_y = odeint(func, y0, t, method='euler').to(device)
-    # plt.plot(pred_y[:,0,:].cpu().detach(), label=['S', 'I', 'R'])
-    # plt.legend()
+    y0 = y[[0,1],0,:].to(device)
+    pred_y = odeint(func, y0, t, method='euler').to(device)
+    plt.plot(pred_y[:,0,:].cpu().detach(), label=['S', 'I', 'R'])
+    plt.legend()
     
-    optimizer = optim.RMSprop(func.parameters(), lr=1e-3)
+    # optimizer = optim.RMSprop(func.parameters(), lr=1e-3)
     
-    batch_size = 2
-    batch = data[np.arange(batch_size).reshape(-1,1)+np.arange(200//5)]
-    batch_y = torch.tensor(batch, dtype=torch.float32).to(device)
-    batch_t = t
+    # batch_size = 2
+    # batch = data[np.arange(batch_size).reshape(-1,1)+np.arange(200//5)]
+    # batch_y = torch.tensor(batch, dtype=torch.float32).to(device)
+    # batch_t = t
     
-    batch_y0 = batch_y[:,0,:].to(device)
-    for itr in range(1, 1000):
-        optimizer.zero_grad()
-        pred_y = odeint(func, batch_y0, batch_t, method='euler').to(device)
-        pred_y = pred_y.transpose(1,0)
-        loss = torch.mean(torch.abs(pred_y - batch_y))
-        loss.backward()
-        optimizer.step()
+    # batch_y0 = batch_y[:,0,:].to(device)
+    # for itr in range(1, 1000):
+    #     optimizer.zero_grad()
+    #     pred_y = odeint(func, batch_y0, batch_t, method='euler').to(device)
+    #     pred_y = pred_y.transpose(1,0)
+    #     loss = torch.mean(torch.abs(pred_y - batch_y))
+    #     loss.backward()
+    #     optimizer.step()
         
-        print(loss.item())
+    #     print(loss.item())
