@@ -19,7 +19,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-data = np.load('./data/train_sir.npy')
+data = np.load('../data/train_sir.npy')
 # plt.plot(data)
 
 
@@ -93,7 +93,7 @@ class ODEFunc(nn.Module):
         self.integro = self.integral(y_series,self.gg,j)
         print('ina', self.integro.shape)
         # self.integro = self.integral(y_series, self.g, j)
-            
+        
         # print(self.integro.shape)
         # pre = y[-l:,1]
         S, I, R = torch.split(y,1,dim=1)

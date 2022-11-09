@@ -65,7 +65,8 @@ plt.legend()
 
 
 import scipy.stats as stats 
-t = np.linspace(0., 80., 200)
+k = 1
+t = np.linspace(0., 80.//k, 200//k)
 
 dist = stats.gamma.pdf(t, a=2, scale=1.2)
 dist = dist[::-1].reshape(-1,1)

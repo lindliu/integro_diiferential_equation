@@ -6,8 +6,10 @@ from .misc import Perturb
 class Euler(FixedGridODESolver):
     order = 1
 
-    def _step_func(self, func, t0, dt, t1, y0):
-        f0 = func(t0, y0, perturb=Perturb.NEXT if self.perturb else Perturb.NONE)
+    def _step_func(self, func, t0, dt, t1, y0, integro):
+        # print('a3gb3212313213312313', t0, y0.shape, integro.shape)
+        f0 = func(t0, y0, integro, perturb=Perturb.NEXT if self.perturb else Perturb.NONE)
+        # print('321123', f0)
         return dt * f0, f0
 
 

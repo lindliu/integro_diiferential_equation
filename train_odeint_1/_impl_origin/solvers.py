@@ -52,7 +52,7 @@ class AdaptiveStepsizeEventODESolver(AdaptiveStepsizeODESolver, metaclass=abc.AB
 class FixedGridODESolver(metaclass=abc.ABCMeta):
     order: int
 
-    def __init__(self, func, y0, step_size=None, grid_constructor=None, interp="linear", perturb=False, **unused_kwargs):
+    def __init__(self, func, y0, K, step_size=None, grid_constructor=None, interp="linear", perturb=False, **unused_kwargs):
         self.atol = unused_kwargs.pop('atol')
         unused_kwargs.pop('rtol', None)
         unused_kwargs.pop('norm', None)
@@ -66,7 +66,8 @@ class FixedGridODESolver(metaclass=abc.ABCMeta):
         self.step_size = step_size
         self.interp = interp
         self.perturb = perturb
-
+        self.K = K
+        
         if step_size is None:
             if grid_constructor is None:
                 self.grid_constructor = lambda f, y0, t: t
@@ -103,6 +104,7 @@ class FixedGridODESolver(metaclass=abc.ABCMeta):
         time_grid = self.grid_constructor(self.func, self.y0, t)
         assert time_grid[0] == t[0] and time_grid[-1] == t[-1]
 
+        ### time, batch, dim
         solution = torch.empty(len(t), *self.y0.shape, dtype=self.y0.dtype, device=self.y0.device)
         solution[0] = self.y0
 
@@ -111,9 +113,13 @@ class FixedGridODESolver(metaclass=abc.ABCMeta):
         for t0, t1 in zip(time_grid[:-1], time_grid[1:]):
             dt = t1 - t0
             self.func.callback_step(t0, y0, dt)
-            dy, f0 = self._step_func(self.func, t0, dt, t1, y0)
+            
+            # integro = self.func.integration(solution[:j], self.K[:j])
+            integro = self.integration(solution[:j], self.K[:j])
+            
+            dy, f0 = self._step_func(self.func, t0, dt, t1, y0, integro)
             y1 = y0 + dy
-
+            
             while j < len(t) and t1 >= t[j]:
                 if self.interp == "linear":
                     solution[j] = self._linear_interp(t0, t1, y0, y1, t[j])
@@ -126,7 +132,21 @@ class FixedGridODESolver(metaclass=abc.ABCMeta):
             y0 = y1
 
         return solution
+    
+    def integration(self, solution, K):
+        # print('sdfsfdsfsf', solution.shape, K.shape)
+        
+        S, I, R = torch.split(solution, 1, dim=2)
+        # https://discuss.pytorch.org/t/one-of-the-variables-required-has-been-modified-by-inplace-operation/104328
+        I = I.clone().transpose(1,0)  ######clone ???????
+        # print('sfaf: ', I.shape, K.shape)
 
+        integro = I*K
+        # print('safdasfasfd', integro.shape)
+        integro = torch.sum(integro, dim=1)*0.4103
+        return integro
+    
+    
     def integrate_until_event(self, t0, event_fn):
         assert self.step_size is not None, "Event handling for fixed step solvers currently requires `step_size` to be provided in options."
 

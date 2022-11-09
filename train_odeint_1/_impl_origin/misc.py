@@ -175,7 +175,7 @@ class _PerturbFunc(torch.nn.Module):
         super(_PerturbFunc, self).__init__()
         self.base_func = base_func
 
-    def forward(self, t, y, *, perturb=Perturb.NONE):
+    def forward(self, t, y, integro, *, perturb=Perturb.NONE):
         assert isinstance(perturb, Perturb), "perturb argument must be of type Perturb enum"
         # This dtype change here might be buggy.
         # The exact time value should be determined inside the solver,
@@ -190,7 +190,7 @@ class _PerturbFunc(torch.nn.Module):
         else:
             # Do nothing.
             pass
-        return self.base_func(t, y)
+        return self.base_func(t, y, integro)
 
 
 def _check_inputs(func, y0, t, rtol, atol, method, options, event_fn, SOLVERS):

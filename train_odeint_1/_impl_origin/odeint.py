@@ -28,7 +28,7 @@ SOLVERS = {
 }
 
 
-def odeint(func, y0, t, *, rtol=1e-7, atol=1e-9, method=None, options=None, event_fn=None):
+def odeint(func, func_m, y0, t, *, rtol=1e-7, atol=1e-9, method=None, options=None, event_fn=None):
     """Integrate a system of ordinary differential equations.
 
     Solves the initial value problem for a non-stiff system of first order ODEs:
@@ -69,9 +69,12 @@ def odeint(func, y0, t, *, rtol=1e-7, atol=1e-9, method=None, options=None, even
         ValueError: if an invalid `method` is provided.
     """
 
+    K = func_m(t.reshape(-1,1))
+    # print('KKKKK', K.shape)
+    
     shapes, func, y0, t, rtol, atol, method, options, event_fn, t_is_reversed = _check_inputs(func, y0, t, rtol, atol, method, options, event_fn, SOLVERS)
 
-    solver = SOLVERS[method](func=func, y0=y0, rtol=rtol, atol=atol, **options)
+    solver = SOLVERS[method](func=func, y0=y0, K=K, rtol=rtol, atol=atol, **options)
 
     if event_fn is None:
         solution = solver.integrate(t)
