@@ -62,8 +62,6 @@ plt.legend()
 
 
 
-
-
 import scipy.stats as stats 
 k = 1
 t = np.linspace(0., 80.//k, 200//k)
@@ -73,6 +71,7 @@ dist = dist[::-1].reshape(-1,1)
 
 dx = 1/dist.sum()
 dist = dist*dx
+np.save('./data/dist.npy', dist)
 
 plt.figure()
 plt.plot(dist)
@@ -141,152 +140,6 @@ plt.plot(SIR_batch[0], label=['s','i','r'])
 plt.legend()
 
 np.save('./data/test_sir.npy', SIR_batch)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-##### without integration #####
-def f_SIR(y, t, l=1, beta=1.5, gamma=1):
-    pre = y[-l:,1]
-    integro = sum(pre*dist[-l:,0])
-    
-    S, I, R = y[-1]
-    
-    dSdt = -beta * S * I + integro
-    dIdt = beta * S * I - gamma * I
-    dRdt = gamma * I - integro
-    return np.array([[dSdt, dIdt, dRdt]])
-
-import matplotlib.pyplot as plt
-import numpy as np
-import scipy.stats as stats 
-length = 500
-t = np.linspace(0., 50., length)
-
-dist = stats.gamma.pdf(t, a=2, scale=1.2)
-dist = dist[::-1].reshape(-1,1)
-
-dx = t[1]-t[0]
-dist = dist*dx
-
-# plt.figure()
-# plt.plot(dist)
-
-dt = dx
-
-SIR_f = np.zeros([length,3])
-S0 = np.random.rand()*.2+.8  # S0 in [0.8, 1]
-I0 = np.random.rand()*.05    # I0 in [ 0 , 0.05]
-R0 = 1-S0-I0
-SIR_f[0,:] = np.array([[1, 0.001, 0]])
-# SIR_f[0,:] = np.array([[S0, I0, R0]])
-
-beta = 1.5
-gamma = 1
-for i in range(length-1):
-    SIR_f[[i+1]] = SIR_f[[i]] + f_SIR(SIR_f[:i+1,:], t, i+1, beta, gamma)*dt
-    
-plt.figure()
-plt.plot(SIR_f, label=['s','i','r'])
-plt.legend()
-
-
-
-
-
-
-
-##### with integration #####
-
-from scipy.interpolate import interp1d, UnivariateSpline, Rbf
-import matplotlib.pyplot as plt
-import numpy as np
-from functools import partial
-import scipy.stats as stats 
-
-def integrate_real(pre, t, K):
-    interp_y = interp1d(t, pre, kind='slinear')
-
-    new_dt = 0.001
-    new_t = np.arange(0, t[-1], new_dt)
-    new_y = interp_y(new_t)
-    new_gamma = K(new_t)[::-1]
-    return sum(new_y*new_gamma)*new_dt
-
-
-def integrate(pre, t, dist):
-    interp_y = interp1d(t, pre, kind='slinear')
-
-    new_dt = 0.001
-    new_t = np.arange(0, t[-1], new_dt)
-    new_y = interp_y(new_t)
-    new_gamma = interp_gamma(new_t)[::-1]
-    return sum(new_y*new_gamma)*new_dt
-
-
-def f_SIR(y, t, dt, beta=1.5, gamma=1):
-    pre = y[:,1]
-
-    pre = np.r_[pre, pre[-1]]
-    t = np.r_[t,t[-1]+dt]
-    # integro = integrate(pre, t, dist)
-    integro = integrate_real(pre, t, K)
-    
-    S, I, R = y[-1]
-    
-    dSdt = -beta * S * I + integro
-    dIdt = beta * S * I - gamma * I
-    dRdt = gamma * I - integro
-    return np.array([[dSdt, dIdt, dRdt]])
-
-
-def Gamma(t, a, scale):
-    return stats.gamma.pdf(t, a=a, scale=scale)
-K = partial(Gamma, a=2, scale=1.2)
-t_fix = np.linspace(0., 80., 1000)
-dist = K(t_fix)
-interp_gamma = interp1d(t_fix, dist, kind='slinear')
-
-length = 500
-t = np.linspace(0., 50., length)
-dt = t[1]-t[0]
-
-SIR_f = np.zeros([length,3])
-S0 = np.random.rand()*.2+.8  # S0 in [0.8, 1]
-I0 = np.random.rand()*.05    # I0 in [ 0 , 0.05]
-R0 = 1-S0-I0
-SIR_f[0,:] = np.array([[1, 0.001, 0]])
-# SIR_f[0,:] = np.array([[S0, I0, R0]])
-
-beta = 1.5
-gamma = 1
-for i in range(SIR_f.shape[0]-1):
-    # k1 = f_SIR(SIR_f[:i+1,:], t[:i+1], dt, beta, gamma)
-    # k2 = f_SIR(SIR_f[:i+1,:], t[:i+1], dt, beta, gamma)
-    SIR_f[[i+1]] = SIR_f[[i]] + f_SIR(SIR_f[:i+1,:], t[:i+1], dt, beta, gamma)*dt
-    
-plt.figure()
-plt.plot(SIR_f, label=['s','i','r'])
-plt.legend()
-
-
-
-
-
-
-
 
 
 

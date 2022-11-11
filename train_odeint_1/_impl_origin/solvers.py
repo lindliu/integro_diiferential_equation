@@ -115,7 +115,7 @@ class FixedGridODESolver(metaclass=abc.ABCMeta):
             self.func.callback_step(t0, y0, dt)
             
             # integro = self.func.integration(solution[:j], self.K[:j])
-            integro = self.integration(solution[:j], self.K[:j])
+            integro = self.integration(solution[:j], self.K[:j], dt)
             
             dy, f0 = self._step_func(self.func, t0, dt, t1, y0, integro)
             y1 = y0 + dy
@@ -133,7 +133,7 @@ class FixedGridODESolver(metaclass=abc.ABCMeta):
 
         return solution
     
-    def integration(self, solution, K):
+    def integration(self, solution, K, dt):
         # print('sdfsfdsfsf', solution.shape, K.shape)
         
         S, I, R = torch.split(solution, 1, dim=2)
@@ -143,7 +143,7 @@ class FixedGridODESolver(metaclass=abc.ABCMeta):
 
         integro = I*K
         # print('safdasfasfd', integro.shape)
-        integro = torch.sum(integro, dim=1)*0.4103
+        integro = torch.sum(integro, dim=1)*dt
         return integro
     
     
