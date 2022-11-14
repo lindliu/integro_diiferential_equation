@@ -37,42 +37,72 @@ class Memory(nn.Module):
             nn.Sigmoid()
         )
     def forward(self, t):
-        
-        # t = torch.flip(t, [0]).reshape([-1,1])
-        # t = t.repeat(1,2).reshape(-1,1)
         return self.memory(t)
+
+
+# t = torch.linspace(0., 15, 1000).to(device)
+# dist = np.load('../data/dist_l.npy')
+# dist = torch.tensor(dist, dtype=torch.float32).to(device)
+
+# batch_t = t.reshape(-1,1)
+# batch_dist = dist.reshape(-1,1)
+
+# func_m = Memory().to(device)
+# optimizer = optim.RMSprop(func_m.parameters(), lr=1e-3)
+
+# for itr in range(1, 20000):
+#     optimizer.zero_grad()
+    
+#     pred_dist = func_m(batch_t)
+#     loss = nn.functional.mse_loss(pred_dist, batch_dist)
+
+#     loss.backward()
+#     optimizer.step()
+    
+#     if itr%1000==0:
+#         print(loss.item())
+
+# pred_dist = func_m(batch_t)  
+# plt.plot(pred_dist.cpu().detach())
+# plt.plot(batch_dist.cpu())
+
+
+
+
 
 class ODEFunc(nn.Module):
 
     def __init__(self):
         super(ODEFunc, self).__init__()
 
-        self.memory = nn.Sequential(
-            nn.Linear(1, 20),
+        self.NN = nn.Sequential(
+            nn.Linear(2, 20),
             nn.Tanh(),
             nn.Linear(20, 20),
             nn.Tanh(),
             nn.Linear(20, 20),
             nn.Tanh(),
-            nn.Linear(20, 1),
+            nn.Linear(20, 1)
+            # nn.Sigmoid()
         )
 
-        for m in self.memory.modules():
+        for m in self.NN.modules():
             if isinstance(m, nn.Linear):
                 nn.init.normal_(m.weight, mean=0, std=0.1)
                 nn.init.constant_(m.bias, val=0)
                 
-        self.mm = None        
-        self.beta = 1.5
+        self.beta = 2
         self.gamma = 1
+        # self.beta = nn.Parameter(torch.tensor(0.2).to(device), requires_grad=True)  ## initial value matters, if we choose 1.5 then it fails
+        # self.gamma = nn.Parameter(torch.tensor(0.2).to(device), requires_grad=True)
         
     def forward(self, t, y, integro):
-
         S, I, R = torch.split(y,1,dim=1)
         # print('asfafasfasfsafasfd', I.shape, integro.shape)
 
         dSdt = -self.beta * S * I + integro# + self.memory(I)#sum(pre*dist)*dx
-        dIdt = self.beta * S * I - self.gamma * I
+        # dIdt = self.beta * S * I - self.gamma * I
+        dIdt = self.NN(torch.cat((S,R),1))
         dRdt = self.gamma * I - integro#- self.memory(I)#sum(pre*dist)*dx
         return torch.cat((dSdt,dIdt,dRdt),1)
     
@@ -91,17 +121,17 @@ class ODEFunc(nn.Module):
     
 if __name__ == '__main__':
 
-    # data = np.load('../data/train_sir_l.npy')
-    # crop = 200
-    # data = data[:,:crop,:]
-    data = np.load('../data/train_sir.npy')
+    data = np.load('../data/train_sir_l.npy')
+    t = torch.linspace(0., 15, 1000).to(device)
+    
+    k = 1
+    t = t[::k]
+    data = data[[0,1], ::k, :]
 
-    k = 5
-    t = torch.linspace(0., 80./k, 200//k).to(device)
-
-    # data = data[[0,1], ::k, :]
-    data = data[[0,1], :, :]
-
+    # data = np.load('../data/train_sir.npy')
+    # k = 5
+    # t = torch.linspace(0., 80./k, 200//k).to(device)
+    
     func_m = Memory().to(device)
     func = ODEFunc().to(device)
     y = torch.tensor(data, dtype=torch.float32).to(device)
@@ -109,6 +139,7 @@ if __name__ == '__main__':
     # y0 = y[:,0,:].to(device)
     # pred_y = odeint(func, func_m, y0, t, method='euler').to(device)
     # plt.plot(pred_y[:,0,:].cpu().detach(), label=['S', 'I', 'R'])
+    # plt.plot(data[0])
     # plt.legend()
     
     
@@ -125,8 +156,9 @@ if __name__ == '__main__':
     batch_y0 = batch_y[:,0,:].to(device)
     
     batch_t = t
-    for itr in range(1, 1000):
-        idx = np.random.choice(np.arange(data.shape[0]),batch_size)
+    for itr in range(1, 20000):
+        # idx = np.random.choice(np.arange(data.shape[0]),batch_size)
+        idx = np.array([0,1])
         batch_y = torch.tensor(data[idx, ...], dtype=torch.float32).to(device)
         batch_y0 = batch_y[:,0,:].to(device)
 
@@ -137,9 +169,24 @@ if __name__ == '__main__':
         loss.backward()
         optimizer.step()
         
-        if itr%1==0:
-            print(loss.item())
+        if itr%100==0:
+            print(f'itr: {itr}, loss: {loss.item():.6f}')
+            try:
+                print(f'beta: {func.beta.item():.3f}, gamma: {func.gamma.item():.3f}')
+            except:
+                continue
+            
+    ## unknown dist; unknown dIdt as neural network; known gamma beta
+    torch.save(func_m.state_dict(), '../models/func_m_N.pt')
+    torch.save(func.state_dict(), '../models/func_N.pt')
+    
+    # ### unknown dist; known dIdt; unknown gamma beta
+    # torch.save(func_m.state_dict(), '../models/func_m_p.pt') ### train 26000 iters, loss=0.001
+    # torch.save(func.state_dict(), '../models/func_p.pt')
 
+    ### unknown dist; known dIdt; known gamma beta
+    # torch.save(func_m.state_dict(), '../models/func_m.pt')
+    # torch.save(func.state_dict(), '../models/func.pt')
     
     
     
@@ -169,20 +216,30 @@ if __name__ == '__main__':
     #     optimizer.step(closure)
         
     
+    func_m.load_state_dict(torch.load('../models/func_m_N.pt'))
+    func.load_state_dict(torch.load('../models/func_N.pt'))
+    
+    # func_m.load_state_dict(torch.load('../models/func_m_p.pt')) 
+    # func.load_state_dict(torch.load('../models/func_p.pt'))
+    
+    # func_m.load_state_dict(torch.load('../models/func_m.pt'))
+    # func.load_state_dict(torch.load('../models/func.pt'))
 
-            
+
     idx = np.random.choice(np.arange(data.shape[0]),batch_size)
     batch_y = torch.tensor(data[idx, ...], dtype=torch.float32).to(device)
     batch_y0 = batch_y[:,0,:].to(device)
     
     pred_y = odeint(func, func_m, batch_y0, batch_t, method='euler').to(device)
     pred_y = pred_y.transpose(1,0)
-    plt.plot(pred_y[0].detach().cpu())
-    plt.plot(batch_y[0].detach().cpu())
+    
+    fig, ax = plt.subplots(1,2,figsize=(10,4))
+    ax[0].plot(pred_y[0].detach().cpu())
+    ax[0].plot(batch_y[0].detach().cpu())
 
     
     dist = np.load('../data/dist_l.npy')
     K = func_m(t.reshape(-1,1))
-    plt.plot(K.detach().cpu().numpy(), label='dist pred')
-    plt.plot(dist[:crop][::k], label='dist')
-    plt.legend()
+    ax[1].plot(K.detach().cpu().numpy(), label='dist pred')
+    ax[1].plot(dist[::k], label='dist')
+    ax[1].legend()

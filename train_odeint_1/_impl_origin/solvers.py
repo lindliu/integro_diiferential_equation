@@ -115,7 +115,7 @@ class FixedGridODESolver(metaclass=abc.ABCMeta):
             self.func.callback_step(t0, y0, dt)
             
             # integro = self.func.integration(solution[:j], self.K[:j])
-            integro = self.integration(solution[:j], self.K[:j], dt)
+            integro = self.integration(solution[:j], self.K[-j:], dt, t, j)
             
             dy, f0 = self._step_func(self.func, t0, dt, t1, y0, integro)
             y1 = y0 + dy
@@ -133,13 +133,20 @@ class FixedGridODESolver(metaclass=abc.ABCMeta):
 
         return solution
     
-    def integration(self, solution, K, dt):
+    def integration(self, solution, K, dt, t, j):
         # print('sdfsfdsfsf', solution.shape, K.shape)
         
         S, I, R = torch.split(solution, 1, dim=2)
         # https://discuss.pytorch.org/t/one-of-the-variables-required-has-been-modified-by-inplace-operation/104328
         I = I.clone().transpose(1,0)  ######clone ???????
         # print('sfaf: ', I.shape, K.shape)
+
+        
+        # import numpy as np
+        # new_dt = 0.005
+        # new_t = np.arange(0, t[j], new_dt)
+        # K_new = torch.from_numpy(np.interp(new_t, t.numpy().flatten(), self.K.detach().numpy().flatten()))
+        # print(K_new.shape)
 
         integro = I*K
         # print('safdasfasfd', integro.shape)

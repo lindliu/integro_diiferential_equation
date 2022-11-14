@@ -38,7 +38,7 @@ dist = dist[::-1].reshape(-1,1)
 
 
 beta, gamma = 1.5, 1
-batch = 1
+batch = 10
 SIR_batch = np.zeros([batch, length, 3])
 for j in range(batch):
     SIR_f = np.zeros([length,3])
@@ -58,6 +58,10 @@ for j in range(batch):
 plt.figure()
 plt.plot(SIR_batch[0], label=['s','i','r'])
 plt.legend()
+
+np.save('./data/train_sir_l.npy', SIR_batch)
+np.save('./data/dist_l.npy', dist)
+
 
 
 
@@ -111,16 +115,16 @@ def Gamma(t, a, scale):
     return stats.gamma.pdf(t, a=a, scale=scale)
 
 length = 1000
-t = np.linspace(0., 50., length)
+t = np.linspace(0., 15., length)
 dt = t[1]-t[0]
 
 K = partial(Gamma, a=2, scale=1.2)
-t_fix = np.linspace(0., 50., 1000)
-dist = K(t_fix)
+t_fix = np.linspace(0., 15., length)
+dist = K(t_fix)[::-1]
 interp_gamma = interp1d(t_fix, dist, kind='slinear')
 
 
-beta, gamma = 1.5, 1
+beta, gamma = 2, 1
 batch = 10
 SIR_batch = np.zeros([batch, length, 3])
 for j in range(batch):
