@@ -70,6 +70,7 @@ def odeint(func, func_m, y0, t, *, rtol=1e-7, atol=1e-9, method=None, options=No
     """
 
     K = func_m(t.reshape(-1,1))
+    K = torch.flip(K, dims=(0,))
     # print('KKKKK', K.shape)
     
     shapes, func, y0, t, rtol, atol, method, options, event_fn, t_is_reversed = _check_inputs(func, y0, t, rtol, atol, method, options, event_fn, SOLVERS)
