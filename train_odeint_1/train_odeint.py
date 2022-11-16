@@ -102,8 +102,8 @@ class ODEFunc(nn.Module):
         # print('asfafasfasfsafasfd', I.shape, integro.shape)
 
         dSdt = -self.beta * S * I + integro# + self.memory(I)#sum(pre*dist)*dx
-        dIdt = self.beta * S * I - self.gamma * I
-        # dIdt = self.NN(torch.cat((S,R),1))
+        # dIdt = self.beta * S * I - self.gamma * I
+        dIdt = self.NN(torch.cat((S,R),1))
         dRdt = self.gamma * I - integro#- self.memory(I)#sum(pre*dist)*dx
         return torch.cat((dSdt,dIdt,dRdt),1)
     
@@ -127,7 +127,7 @@ if __name__ == '__main__':
     
     k = 1
     t = t[::k]
-    data = data[[0,1], ::k, :]
+    # data = data[[0,1], ::k, :]
 
     # data = np.load('../data/train_sir.npy')
     # k = 5
@@ -219,3 +219,5 @@ if __name__ == '__main__':
     ax[1].plot(K.detach().cpu().numpy()[::-1], label='dist pred')
     ax[1].plot(dist[::k], label='dist')
     ax[1].legend()
+    
+    fig.savefig('./figures/unkonw_dist.png')
