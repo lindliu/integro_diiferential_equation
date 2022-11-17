@@ -142,7 +142,7 @@ class FixedGridODESolver(metaclass=abc.ABCMeta):
         # print('sfaf: ', I.shape, K.shape)
         
         points_to_interp = [torch.arange(0, t[j], .01)]
-        K_inter = RegularGridInterpolator([t], self.K.flatten())
+        K_inter = RegularGridInterpolator([t], self.K.flatten())   ####should be inversed ????????
         K_new = K_inter(points_to_interp)
         # print(K_new)
         # print(t[:j].shape, I.shape)
