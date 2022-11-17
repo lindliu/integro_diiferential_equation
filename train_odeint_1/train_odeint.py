@@ -102,8 +102,8 @@ class ODEFunc(nn.Module):
         # print('asfafasfasfsafasfd', I.shape, integro.shape)
 
         dSdt = -self.beta * S * I + integro# + self.memory(I)#sum(pre*dist)*dx
-        # dIdt = self.beta * S * I - self.gamma * I
-        dIdt = self.NN(torch.cat((S,R),1))
+        dIdt = self.beta * S * I - self.gamma * I
+        # dIdt = self.NN(torch.cat((S,R),1))
         dRdt = self.gamma * I - integro#- self.memory(I)#sum(pre*dist)*dx
         return torch.cat((dSdt,dIdt,dRdt),1)
     
@@ -151,15 +151,15 @@ if __name__ == '__main__':
                     {'params': func_m.parameters(), 'lr': 1e-3}
                 ], lr=1e-4)
     
-    batch_size = 2
+    batch_size = 1
     batch = data
     batch_y = torch.tensor(batch, dtype=torch.float32).to(device)
     batch_y0 = batch_y[:,0,:].to(device)
     
     batch_t = t
-    for itr in range(1, 20000):
+    for itr in range(1, 2000):
         idx = np.random.choice(np.arange(data.shape[0]),batch_size)
-        # idx = np.array([0,1])
+        # idx = np.array([0])
         batch_y = torch.tensor(data[idx, ...], dtype=torch.float32).to(device)
         batch_y0 = batch_y[:,0,:].to(device)
 
@@ -170,36 +170,36 @@ if __name__ == '__main__':
         loss.backward()
         optimizer.step()
         
-        if itr%10==0:
+        if itr%1==0:
             print(f'itr: {itr}, loss: {loss.item():.6f}')
             try:
                 print(f'beta: {func.beta.item():.3f}, gamma: {func.gamma.item():.3f}')
             except:
                 continue
             
-    ## unknown dist; unknown dIdt as neural network; known gamma beta
-    torch.save(func_m.state_dict(), f'../models/func_m_N_{device.type}.pt') ### train 1800 iters, loss=0.001
-    torch.save(func.state_dict(), f'../models/func_N_{device.type}.pt')
+    # ## unknown dist; unknown dIdt as neural network; known gamma beta
+    # torch.save(func_m.state_dict(), f'../models/func_m_N_{device.type}.pt') ### train 1800 iters, loss=0.001
+    # torch.save(func.state_dict(), f'../models/func_N_{device.type}.pt')
     
     # ### unknown dist; known dIdt; unknown gamma beta
     # torch.save(func_m.state_dict(), f'../models/func_m_p_{device.type}.pt') ### train 26000 iters, loss=0.001
     # torch.save(func.state_dict(), f'../models/func_p_{device.type}.pt')
 
-    # ## unknown dist; known dIdt; known gamma beta
-    # torch.save(func_m.state_dict(), f'../models/func_m_{device.type}.pt') ### train 7000 iters, loss=0.001
-    # torch.save(func.state_dict(), f'../models/func_{device.type}.pt') 
+    ## unknown dist; known dIdt; known gamma beta
+    torch.save(func_m.state_dict(), f'../models/func_m_{device.type}.pt') ### train 7000 iters, loss=0.001
+    torch.save(func.state_dict(), f'../models/func_{device.type}.pt') 
     
     
     
     
-    func_m.load_state_dict(torch.load(f'../models/func_m_N_{device.type}.pt'))
-    func.load_state_dict(torch.load(f'../models/func_N_{device.type}.pt'))
+    # func_m.load_state_dict(torch.load(f'../models/func_m_N_{device.type}.pt'))
+    # func.load_state_dict(torch.load(f'../models/func_N_{device.type}.pt'))
     
     # func_m.load_state_dict(torch.load(f'../models/func_m_p_{device.type}.pt')) 
     # func.load_state_dict(torch.load(f'../models/func_p_{device.type}.pt'))
     
-    # func_m.load_state_dict(torch.load(f'../models/func_m_{device.type}.pt'))
-    # func.load_state_dict(torch.load(f'../models/func_{device.type}.pt'))
+    func_m.load_state_dict(torch.load(f'../models/func_m_{device.type}.pt'))
+    func.load_state_dict(torch.load(f'../models/func_{device.type}.pt'))
 
 
     idx = np.random.choice(np.arange(data.shape[0]),batch_size)
@@ -220,4 +220,4 @@ if __name__ == '__main__':
     ax[1].plot(dist[::k], label='dist')
     ax[1].legend()
     
-    fig.savefig('./figures/unkonw_dist.png')
+    # fig.savefig('./figures/unkonw_dist.png')

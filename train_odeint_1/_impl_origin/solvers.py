@@ -1,7 +1,7 @@
 import abc
 import torch
 from .event_handling import find_event
-from .misc import _handle_unused_kwargs
+from .misc import _handle_unused_kwargs, RegularGridInterpolator
 
 
 class AdaptiveStepsizeODESolver(metaclass=abc.ABCMeta):
@@ -140,18 +140,38 @@ class FixedGridODESolver(metaclass=abc.ABCMeta):
         # https://discuss.pytorch.org/t/one-of-the-variables-required-has-been-modified-by-inplace-operation/104328
         I = I.clone().transpose(1,0)  ######clone ???????
         # print('sfaf: ', I.shape, K.shape)
-
         
-        # import numpy as np
-        # new_dt = 0.005
-        # new_t = np.arange(0, t[j], new_dt)
-        # K_new = torch.from_numpy(np.interp(new_t, t.numpy().flatten(), self.K.detach().numpy().flatten()))
-        # print(K_new.shape)
-
-        integro = I*K
-        # print('safdasfasfd', integro.shape)
-        integro = torch.sum(integro, dim=1)*dt
+        points_to_interp = [torch.arange(0, t[j], .01)]
+        K_inter = RegularGridInterpolator([t], self.K.flatten())
+        K_new = K_inter(points_to_interp)
+        # print(K_new)
+        # print(t[:j].shape, I.shape)
+        I_inter = RegularGridInterpolator([t[:j]], I.flatten())
+        I_new = I_inter(points_to_interp)
+        # print(I_new.shape, K_new.shape)
+        
+        integro = I_new*K_new
+        # # print('safdasfasfd', integro.shape)
+        integro = torch.sum(integro)*dt
+        # print(integro)
+        
+        # integro = I*K
+        # # print('safdasfasfd', integro.shape)
+        # integro = torch.sum(integro, dim=1)*dt
         return integro
+    
+    # def integration(self, solution, K, dt, t, j):
+    #     # print('sdfsfdsfsf', solution.shape, K.shape)
+        
+    #     S, I, R = torch.split(solution, 1, dim=2)
+    #     # https://discuss.pytorch.org/t/one-of-the-variables-required-has-been-modified-by-inplace-operation/104328
+    #     I = I.clone().transpose(1,0)  ######clone ???????
+    #     # print('sfaf: ', I.shape, K.shape)
+
+    #     integro = I*K
+    #     # print('safdasfasfd', integro.shape)
+    #     integro = torch.sum(integro, dim=1)*dt
+    #     return integro
     
     
     def integrate_until_event(self, t0, event_fn):
