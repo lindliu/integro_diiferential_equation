@@ -2,7 +2,8 @@ import abc
 import torch
 from .event_handling import find_event
 from .misc import _handle_unused_kwargs, RegularGridInterpolator
-
+from torchcubicspline import(natural_cubic_spline_coeffs, 
+                             NaturalCubicSpline)
 
 class AdaptiveStepsizeODESolver(metaclass=abc.ABCMeta):
     def __init__(self, dtype, y0, norm, **unused_kwargs):
@@ -141,24 +142,79 @@ class FixedGridODESolver(metaclass=abc.ABCMeta):
         I = I.clone().transpose(1,0)  ######clone ???????
         # print('sfaf: ', I.shape, K.shape)
         
-        points_to_interp = [torch.arange(0, t[j], .01)]
-        K_inter = RegularGridInterpolator([t], self.K.flatten())   ####should be inversed ????????
+        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        
+        dt_new = .01
+        points_to_interp = [torch.arange(0, t[j], dt_new).to(device)]
+        K_inv = torch.flip(self.K, dims=(0,))#.clone()
+        K_inter = RegularGridInterpolator([t], K_inv.flatten()) ####should be inversed ????????
         K_new = K_inter(points_to_interp)
+        K_new = torch.flip(K_new, dims=(0,))
         # print(K_new)
         # print(t[:j].shape, I.shape)
         I_inter = RegularGridInterpolator([t[:j]], I.flatten())
         I_new = I_inter(points_to_interp)
-        # print(I_new.shape, K_new.shape)
+        # print('asdfasdfasdf')
+        # print(I_new[:10], I[0,:10,0])
+        # print(I_new.shape, I.shape)
+        # print(K_new.shape, K.shape)
         
         integro = I_new*K_new
         # # print('safdasfasfd', integro.shape)
-        integro = torch.sum(integro)*dt
+        integro = torch.sum(integro)*dt_new
         # print(integro)
         
         # integro = I*K
         # # print('safdasfasfd', integro.shape)
         # integro = torch.sum(integro, dim=1)*dt
         return integro
+    
+    
+    # def integration(self, solution, K, dt, t, j):
+    #     # print('sdfsfdsfsf', solution.shape, K.shape)
+    #     # print(t.shape)
+    #     S, I, R = torch.split(solution, 1, dim=2)
+    #     # https://discuss.pytorch.org/t/one-of-the-variables-required-has-been-modified-by-inplace-operation/104328
+    #     I = I.clone().transpose(1,0)  ######clone ???????
+    #     # print('sfaf: ', I.shape, K.shape)
+        
+    #     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+          
+    #     if j<=1:
+    #         integro = I*K
+    #         # print('safdasfasfd', integro.shape)
+    #         integro = torch.sum(integro, dim=1)*dt
+    #         return integro
+        
+    #     else:
+    #         dt_new = .01
+    #         points_to_interp = torch.arange(0, t[j], dt_new).to(device)
+    #         K_inv = torch.flip(self.K, dims=(0,))#.clone()
+    #         K_coeffs = natural_cubic_spline_coeffs(t, K_inv)
+    #         K_spline = NaturalCubicSpline(K_coeffs)
+    #         K_new = K_spline.evaluate(points_to_interp)
+    #         # print(points_to_interp.shape, K_new.shape)
+    #         K_new = torch.flip(K_new, dims=(0,))
+    #         # print(K_new)
+    #         # print(t[:j].shape, I.shape)
+    #         I_coeffs = natural_cubic_spline_coeffs(t[:j], I[0])
+    #         # print(I_coeffs)
+    #         I_spline = NaturalCubicSpline(I_coeffs)
+    #         I_new = I_spline.evaluate(points_to_interp)
+    #         # print(points_to_interp.shape, I_new.shape)
+    #         # print(I_new.shape, I.shape)
+            
+    #         integro = I_new*K_new
+    #         # # print('safdasfasfd', integro.shape)
+    #         integro = torch.sum(integro)*dt_new
+    #         # print(integro)
+            
+    #         # integro = I*K
+    #         # # print('safdasfasfd', integro.shape)
+    #         # integro = torch.sum(integro, dim=1)*dt
+    #         return integro
+    
+    
     
     # def integration(self, solution, K, dt, t, j):
     #     # print('sdfsfdsfsf', solution.shape, K.shape)

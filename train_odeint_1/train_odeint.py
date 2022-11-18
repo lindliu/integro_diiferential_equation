@@ -125,9 +125,9 @@ if __name__ == '__main__':
     data = np.load('../data/train_sir_l.npy')
     t = torch.linspace(0., 15, 1000).to(device)
     
-    k = 1
+    k = 5
     t = t[::k]
-    # data = data[[0,1], ::k, :]
+    data = data[:, ::k, :]
 
     # data = np.load('../data/train_sir.npy')
     # k = 5
@@ -158,8 +158,8 @@ if __name__ == '__main__':
     
     batch_t = t
     for itr in range(1, 2000):
-        idx = np.random.choice(np.arange(data.shape[0]),batch_size)
-        # idx = np.array([0])
+        # idx = np.random.choice(np.arange(data.shape[0]),batch_size)
+        idx = np.array([0])
         batch_y = torch.tensor(data[idx, ...], dtype=torch.float32).to(device)
         batch_y0 = batch_y[:,0,:].to(device)
 

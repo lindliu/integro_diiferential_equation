@@ -395,6 +395,9 @@ def _flip_option(options, option_name):
 
 
 
+### https://stackoverflow.com/questions/61616810/how-to-do-cubic-spline-interpolation-and-integration-in-pytorch
+### https://github.com/patrick-kidger/torchcubicspline
+### https://github.com/sbarratt/torch_interpolations
 import torch
 from itertools import product
 
@@ -411,10 +414,10 @@ class RegularGridInterpolator:
         assert isinstance(self.points, tuple) or isinstance(self.points, list)
         assert isinstance(self.values, torch.Tensor)
 
-        self.ms = list(self.values.shape)
+        self.ms = len(list(self.values.shape))
         self.n = len(self.points)
 
-        assert len(self.ms) == self.n
+        assert self.ms == self.n
 
         for i, p in enumerate(self.points):
             assert isinstance(p, torch.Tensor)
