@@ -92,18 +92,18 @@ class ODEFunc(nn.Module):
                 nn.init.normal_(m.weight, mean=0, std=0.1)
                 nn.init.constant_(m.bias, val=0)
                 
-        self.beta = 2
-        self.gamma = 1
-        # self.beta = nn.Parameter(torch.tensor(0.2).to(device), requires_grad=True)  ## initial value matters, if we choose 1.5 then it fails
-        # self.gamma = nn.Parameter(torch.tensor(0.2).to(device), requires_grad=True)
+        # self.beta = 2
+        # self.gamma = 1
+        self.beta = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)  ## initial value matters, if we choose 1.5 then it fails
+        self.gamma = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)
         
     def forward(self, t, y, integro):
         S, I, R = torch.split(y,1,dim=1)
         # print('asfafasfasfsafasfd', I.shape, integro.shape)
 
         dSdt = -self.beta * S * I + integro# + self.memory(I)#sum(pre*dist)*dx
-        dIdt = self.beta * S * I - self.gamma * I
-        # dIdt = self.NN(torch.cat((S,R),1))
+        # dIdt = self.beta * S * I - self.gamma * I
+        dIdt = self.NN(torch.cat((S,R),1))
         dRdt = self.gamma * I - integro#- self.memory(I)#sum(pre*dist)*dx
         return torch.cat((dSdt,dIdt,dRdt),1)
     
@@ -170,7 +170,7 @@ if __name__ == '__main__':
         loss.backward()
         optimizer.step()
         
-        if itr%1==0:
+        if itr%10==0:
             print(f'itr: {itr}, loss: {loss.item():.6f}')
             try:
                 print(f'beta: {func.beta.item():.3f}, gamma: {func.gamma.item():.3f}')

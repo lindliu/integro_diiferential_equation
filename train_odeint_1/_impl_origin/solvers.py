@@ -187,7 +187,7 @@ class FixedGridODESolver(metaclass=abc.ABCMeta):
     #         return integro
         
     #     else:
-    #         dt_new = .01
+    #         dt_new = .05
     #         points_to_interp = torch.arange(0, t[j], dt_new).to(device)
     #         K_inv = torch.flip(self.K, dims=(0,))#.clone()
     #         K_coeffs = natural_cubic_spline_coeffs(t, K_inv)
