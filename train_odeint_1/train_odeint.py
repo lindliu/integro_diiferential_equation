@@ -102,8 +102,8 @@ class ODEFunc(nn.Module):
         # print('asfafasfasfsafasfd', I.shape, integro.shape)
 
         dSdt = -self.beta * S * I + integro# + self.memory(I)#sum(pre*dist)*dx
-        # dIdt = self.beta * S * I - self.gamma * I
-        dIdt = self.NN(torch.cat((S,R),1))
+        dIdt = self.beta * S * I - self.gamma * I
+        # dIdt = self.NN(torch.cat((S,R),1))
         dRdt = self.gamma * I - integro#- self.memory(I)#sum(pre*dist)*dx
         return torch.cat((dSdt,dIdt,dRdt),1)
     
@@ -157,7 +157,7 @@ if __name__ == '__main__':
     batch_y0 = batch_y[:,0,:].to(device)
     
     batch_t = t
-    for itr in range(1, 2000):
+    for itr in range(1, 30000):
         # idx = np.random.choice(np.arange(data.shape[0]),batch_size)
         idx = np.array([0])
         batch_y = torch.tensor(data[idx, ...], dtype=torch.float32).to(device)
