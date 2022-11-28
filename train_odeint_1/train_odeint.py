@@ -92,18 +92,18 @@ class ODEFunc(nn.Module):
                 nn.init.normal_(m.weight, mean=0, std=0.1)
                 nn.init.constant_(m.bias, val=0)
                 
-        # self.beta = 2
-        # self.gamma = 1
-        self.beta = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)  ## initial value matters, if we choose 1.5 then it fails
-        self.gamma = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)
+        self.beta = 2
+        self.gamma = 1
+        # self.beta = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)  ## initial value matters, if we choose 1.5 then it fails
+        # self.gamma = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)
         
     def forward(self, t, y, integro):
         S, I, R = torch.split(y,1,dim=1)
         # print('asfafasfasfsafasfd', I.shape, integro.shape)
 
         dSdt = -self.beta * S * I + integro# + self.memory(I)#sum(pre*dist)*dx
-        dIdt = self.beta * S * I - self.gamma * I
-        # dIdt = self.NN(torch.cat((S,R),1))
+        # dIdt = self.beta * S * I - self.gamma * I
+        dIdt = self.NN(torch.cat((S,R),1))
         dRdt = self.gamma * I - integro#- self.memory(I)#sum(pre*dist)*dx
         return torch.cat((dSdt,dIdt,dRdt),1)
     
@@ -125,7 +125,7 @@ if __name__ == '__main__':
     data = np.load('../data/train_sir_l.npy')
     t = torch.linspace(0., 15, 1000).to(device)
     
-    k = 5
+    k = 1
     t = t[::k]
     data = data[:, ::k, :]
 
@@ -177,29 +177,29 @@ if __name__ == '__main__':
             except:
                 continue
             
-    # ## unknown dist; unknown dIdt as neural network; known gamma beta
-    # torch.save(func_m.state_dict(), f'../models/func_m_N_{device.type}.pt') ### train 1800 iters, loss=0.001
-    # torch.save(func.state_dict(), f'../models/func_N_{device.type}.pt')
+    ## unknown dist; unknown dIdt as neural network; known gamma beta
+    torch.save(func_m.state_dict(), f'../models/func_m_N_{device.type}.pt') ### train 1800 iters, loss=0.001
+    torch.save(func.state_dict(), f'../models/func_N_{device.type}.pt')
     
     # ### unknown dist; known dIdt; unknown gamma beta
     # torch.save(func_m.state_dict(), f'../models/func_m_p_{device.type}.pt') ### train 26000 iters, loss=0.001
     # torch.save(func.state_dict(), f'../models/func_p_{device.type}.pt')
 
-    ## unknown dist; known dIdt; known gamma beta
-    torch.save(func_m.state_dict(), f'../models/func_m_{device.type}.pt') ### train 7000 iters, loss=0.001
-    torch.save(func.state_dict(), f'../models/func_{device.type}.pt') 
+    # ## unknown dist; known dIdt; known gamma beta
+    # torch.save(func_m.state_dict(), f'../models/func_m_{device.type}.pt') ### train 7000 iters, loss=0.001
+    # torch.save(func.state_dict(), f'../models/func_{device.type}.pt') 
     
     
     
     
-    # func_m.load_state_dict(torch.load(f'../models/func_m_N_{device.type}.pt'))
-    # func.load_state_dict(torch.load(f'../models/func_N_{device.type}.pt'))
+    func_m.load_state_dict(torch.load(f'../models/func_m_N_{device.type}.pt'))
+    func.load_state_dict(torch.load(f'../models/func_N_{device.type}.pt'))
     
     # func_m.load_state_dict(torch.load(f'../models/func_m_p_{device.type}.pt')) 
     # func.load_state_dict(torch.load(f'../models/func_p_{device.type}.pt'))
     
-    func_m.load_state_dict(torch.load(f'../models/func_m_{device.type}.pt'))
-    func.load_state_dict(torch.load(f'../models/func_{device.type}.pt'))
+    # func_m.load_state_dict(torch.load(f'../models/func_m_{device.type}.pt'))
+    # func.load_state_dict(torch.load(f'../models/func_{device.type}.pt'))
 
 
     idx = np.random.choice(np.arange(data.shape[0]),batch_size)
