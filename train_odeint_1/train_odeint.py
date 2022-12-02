@@ -40,32 +40,32 @@ class Memory(nn.Module):
         return self.memory(t)
 
 
-# t = torch.linspace(0., 15, 1000).to(device)
-# dist = np.load('../data/dist_l.npy')
-# dist = torch.tensor(dist, dtype=torch.float32).to(device)
+t = torch.linspace(0., 15, 1000).to(device)
+dist = np.load('../data/dist_l.npy')
+dist = torch.tensor(dist, dtype=torch.float32).to(device)
 
-# batch_t = t.reshape(-1,1)
-# batch_dist = dist.reshape(-1,1)
+batch_t = t.reshape(-1,1)
+batch_dist = dist.reshape(-1,1)
 
-# func_m = Memory().to(device)
-# optimizer = optim.RMSprop(func_m.parameters(), lr=1e-3)
+func_m = Memory().to(device)
+optimizer = optim.RMSprop(func_m.parameters(), lr=1e-3)
 
-# for itr in range(1, 20000):
-#     optimizer.zero_grad()
+for itr in range(1, 20000):
+    optimizer.zero_grad()
     
-#     pred_dist = func_m(batch_t)
-#     pred_dist = torch.flip(pred_dist, dims=(0,))
-#     loss = nn.functional.mse_loss(pred_dist, batch_dist)
+    pred_dist = func_m(batch_t)
+    pred_dist = torch.flip(pred_dist, dims=(0,))
+    loss = nn.functional.mse_loss(pred_dist, batch_dist)
 
-#     loss.backward()
-#     optimizer.step()
+    loss.backward()
+    optimizer.step()
     
-#     if itr%1000==0:
-#         print(loss.item())
+    if itr%1000==0:
+        print(loss.item())
 
-# pred_dist = func_m(batch_t)  
-# plt.plot(pred_dist.cpu().detach().numpy()[::-1])
-# plt.plot(batch_dist.cpu())
+pred_dist = func_m(batch_t)  
+plt.plot(pred_dist.cpu().detach().numpy()[::-1])
+plt.plot(batch_dist.cpu())
 
 
 
@@ -105,6 +105,8 @@ class ODEFunc(nn.Module):
         # dIdt = self.beta * S * I - self.gamma * I
         dIdt = self.NN(torch.cat((S,R),1))
         dRdt = self.gamma * I - integro#- self.memory(I)#sum(pre*dist)*dx
+        
+        # print('asdf', integro)
         return torch.cat((dSdt,dIdt,dRdt),1)
     
     def integration(self, solution, K, dt):
@@ -137,14 +139,15 @@ if __name__ == '__main__':
     func = ODEFunc().to(device)
     y = torch.tensor(data, dtype=torch.float32).to(device)
     
-    # y0 = y[:,0,:].to(device)
+    y0 = y[[0],0,:].to(device)
+    pred_y = odeint(func, func_m, y0, t, method='dopri5').to(device)
     # pred_y = odeint(func, func_m, y0, t, method='euler').to(device)
-    # plt.plot(pred_y[:,0,:].cpu().detach(), label=['S', 'I', 'R'])
-    # plt.plot(data[0])
-    # plt.legend()
+    plt.plot(pred_y[:,0,:].cpu().detach(), label=['S', 'I', 'R'])
+    plt.plot(data[0])
+    plt.legend()
     
     
-
+    """
     # optimizer = optim.Adam(func.parameters(), lr=1e-3)
     optimizer = optim.Adam([
                     {'params': func.parameters()},
@@ -221,3 +224,5 @@ if __name__ == '__main__':
     ax[1].legend()
     
     # fig.savefig('./figures/unkonw_dist.png')
+    
+    """

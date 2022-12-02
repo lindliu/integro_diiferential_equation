@@ -32,7 +32,8 @@ class AdaptiveStepsizeODESolver(metaclass=abc.ABCMeta):
         t = t.to(self.dtype)
         self._before_integrate(t)
         for i in range(1, len(t)):
-            solution[i] = self._advance(t[i])
+            # integro = self.integration(solution[:i], self.K[-i:], dt, t, i)
+            solution[i] = self._advance(t[i], solution[:i], self.K[-i:], t, i)
         return solution
 
 
@@ -117,6 +118,7 @@ class FixedGridODESolver(metaclass=abc.ABCMeta):
             
             # integro = self.func.integration(solution[:j], self.K[:j])
             integro = self.integration(solution[:j], self.K[-j:], dt, t, j)
+            # print('asdfaf', integro)
             
             dy, f0 = self._step_func(self.func, t0, dt, t1, y0, integro)
             y1 = y0 + dy
@@ -147,6 +149,7 @@ class FixedGridODESolver(metaclass=abc.ABCMeta):
         dt_new = .01
         points_to_interp = [torch.arange(0, t[j], dt_new).to(device)]
         K_inv = torch.flip(self.K, dims=(0,))#.clone()
+        print('afffff', K_inv.shape, t.shape)
         K_inter = RegularGridInterpolator([t], K_inv.flatten()) ####should be inversed ????????
         K_new = K_inter(points_to_interp)
         K_new = torch.flip(K_new, dims=(0,))
