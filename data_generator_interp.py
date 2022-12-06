@@ -111,21 +111,40 @@ def f_SIR(y, t, dt, beta=1.5, gamma=1):
     return np.array([[dSdt, dIdt, dRdt]])
 
 
+
+def Norm(t, loc, scale):
+    return stats.norm.pdf(t, loc=loc, scale=scale)
+
 def Gamma(t, a, scale):
     return stats.gamma.pdf(t, a=a, scale=scale)
 
-length = 1000
-t = np.linspace(0., 15., length)
-dt = t[1]-t[0]
+Erlang = False
 
-K = partial(Gamma, a=2, scale=1.2)
-t_fix = np.linspace(0., 15., length)
+if Erlang==True:
+    ##### Erlang distribution #####
+    length = 1000
+    end = 15
+    t = np.linspace(0., end, length)
+    dt = t[1]-t[0]
+    K = partial(Gamma, a=2, scale=1.2)
+
+else:
+    ##### Gaussian distribution #####
+    length = 1000
+    end = 55
+    t = np.linspace(0., end, length)
+    dt = t[1]-t[0]
+    K = partial(Norm, loc=9, scale=.01)
+
+t_fix = np.linspace(0., end, length)
 dist = K(t_fix)[::-1]
 interp_gamma = interp1d(t_fix, dist, kind='slinear')
 
+plt.figure()
+plt.plot(dist)
 
 beta, gamma = 2, 1
-batch = 10
+batch = 1
 SIR_batch = np.zeros([batch, length, 3])
 for j in range(batch):
     SIR_f = np.zeros([length,3])
