@@ -59,8 +59,8 @@ plt.figure()
 plt.plot(SIR_batch[0], label=['s','i','r'])
 plt.legend()
 
-np.save('./data/train_sir_l.npy', SIR_batch)
-np.save('./data/dist_l.npy', dist)
+# np.save('./data/train_sir_l.npy', SIR_batch)
+# np.save('./data/dist_l.npy', dist)
 
 
 
@@ -74,6 +74,8 @@ np.save('./data/dist_l.npy', dist)
 from scipy.interpolate import interp1d, UnivariateSpline, Rbf
 from functools import partial
 import scipy.stats as stats 
+import numpy as np 
+import matplotlib.pyplot as plt
 
 def integrate_real(pre, t, K):
     interp_y = interp1d(t, pre, kind='slinear')
@@ -127,14 +129,18 @@ if Erlang==True:
     t = np.linspace(0., end, length)
     dt = t[1]-t[0]
     K = partial(Gamma, a=2, scale=1.2)
+    
+    beta, gamma = 2, 1
 
 else:
     ##### Gaussian distribution #####
-    length = 1000
-    end = 55
+    length = 100
+    end = 25
     t = np.linspace(0., end, length)
     dt = t[1]-t[0]
-    K = partial(Norm, loc=9, scale=.01)
+    K = partial(Norm, loc=5, scale=1)
+
+    beta, gamma = 2.3, 1
 
 t_fix = np.linspace(0., end, length)
 dist = K(t_fix)[::-1]
@@ -143,15 +149,22 @@ interp_gamma = interp1d(t_fix, dist, kind='slinear')
 plt.figure()
 plt.plot(dist)
 
-beta, gamma = 2, 1
+
+
+# def normal_dist(x, sigma=1, mu=0):
+#     return 1/(sigma*(2*np.pi)**.5)*np.exp(-1/2*(x-mu)**2/sigma**2)
+# plt.figure()
+# plt.plot(normal_dist(t, sigma=1, mu=5))
+
+
 batch = 1
 SIR_batch = np.zeros([batch, length, 3])
 for j in range(batch):
     SIR_f = np.zeros([length,3])
-    S0 = np.random.rand()*.2+.8  # S0 in [0.8, 1]
-    I0 = np.random.rand()*.05    # I0 in [ 0 , 0.05]
-    R0 = 1-S0-I0
-    # SIR_f[0,:] = np.array([[1, 0.001, 0]])
+    # S0 = np.random.rand()*.2+.8  # S0 in [0.8, 1]
+    # I0 = np.random.rand()*.05    # I0 in [ 0 , 0.05]
+    # R0 = 1-S0-I0
+    S0, I0, R0 = .99, 0.01, 0
     SIR_f[0,:] = np.array([[S0, I0, R0]])
     
     for i in range(SIR_f.shape[0]-1):
@@ -163,8 +176,12 @@ plt.figure()
 plt.plot(SIR_batch[0], label=['s','i','r'])
 plt.legend()
 
-np.save('./data/train_sir_l.npy', SIR_batch)
-np.save('./data/dist_l.npy', dist)
+if Erlang==True:
+    np.save('./data/train_sir_l.npy', SIR_batch)
+    np.save('./data/dist_l.npy', dist)
+else:
+    np.save('./data/train_sir_l_norm.npy', SIR_batch)
+    np.save('./data/dist_l_norm.npy', dist)
 
 
 

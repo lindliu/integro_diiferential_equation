@@ -149,7 +149,7 @@ class FixedGridODESolver(metaclass=abc.ABCMeta):
         dt_new = .01
         points_to_interp = [torch.arange(0, t[j], dt_new).to(device)]
         K_inv = torch.flip(self.K, dims=(0,))#.clone()
-        print('afffff', K_inv.shape, t.shape)
+        # print('afffff', K_inv.shape, t.shape)
         K_inter = RegularGridInterpolator([t], K_inv.flatten()) ####should be inversed ????????
         K_new = K_inter(points_to_interp)
         K_new = torch.flip(K_new, dims=(0,))

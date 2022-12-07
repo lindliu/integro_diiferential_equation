@@ -36,38 +36,55 @@ class Memory(nn.Module):
             # nn.ReLU()
             nn.Sigmoid()
         )
+        
+        for m in self.memory.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.normal_(m.weight, mean=0, std=0.01)
+                nn.init.constant_(m.bias, val=0)
+                
+        
+        self.mu = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)  ## initial value matters, if we choose 1.5 then it fails
+        self.sigma = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)
+        
+    # def forward(self, t):
+    #     return self.memory(t)
+    
     def forward(self, t):
-        return self.memory(t)
+        return 1/(self.sigma*(2*torch.pi)**.5)*torch.exp(-1/2*(t-self.mu)**2/self.sigma**2)
 
 
-t = torch.linspace(0., 15, 1000).to(device)
-dist = np.load('../data/dist_l.npy')
-dist = torch.tensor(dist, dtype=torch.float32).to(device)
+# Erlange = False
+# if Erlange==True:    
+#     t = torch.linspace(0., 15, 1000).to(device)
+#     dist = np.load('../data/dist_l.npy')
+# else:
+#     t = torch.linspace(0., 15, 100).to(device)
+#     dist = np.load('../data/dist_l_norm.npy')
 
-batch_t = t.reshape(-1,1)
-batch_dist = dist.reshape(-1,1)
+# dist = torch.tensor(dist, dtype=torch.float32).to(device)
 
-func_m = Memory().to(device)
-optimizer = optim.RMSprop(func_m.parameters(), lr=1e-3)
+# batch_t = t.reshape(-1,1)
+# batch_dist = dist.reshape(-1,1)
 
-for itr in range(1, 20000):
-    optimizer.zero_grad()
+# func_m = Memory().to(device)
+# optimizer = optim.RMSprop(func_m.parameters(), lr=1e-3)
+
+# for itr in range(1, 20000):
+#     optimizer.zero_grad()
     
-    pred_dist = func_m(batch_t)
-    pred_dist = torch.flip(pred_dist, dims=(0,))
-    loss = nn.functional.mse_loss(pred_dist, batch_dist)
+#     pred_dist = func_m(batch_t)
+#     pred_dist = torch.flip(pred_dist, dims=(0,))
+#     loss = nn.functional.mse_loss(pred_dist, batch_dist)
 
-    loss.backward()
-    optimizer.step()
+#     loss.backward()
+#     optimizer.step()
     
-    if itr%1000==0:
-        print(loss.item())
+#     if itr%1000==0:
+#         print(loss.item())
 
-pred_dist = func_m(batch_t)  
-plt.plot(pred_dist.cpu().detach().numpy()[::-1])
-plt.plot(batch_dist.cpu())
-
-
+# pred_dist = func_m(batch_t)  
+# plt.plot(pred_dist.cpu().detach().numpy()[::-1])
+# plt.plot(batch_dist.cpu())
 
 
 
@@ -89,21 +106,21 @@ class ODEFunc(nn.Module):
 
         for m in self.NN.modules():
             if isinstance(m, nn.Linear):
-                nn.init.normal_(m.weight, mean=0, std=0.1)
+                nn.init.normal_(m.weight, mean=0, std=0.01)
                 nn.init.constant_(m.bias, val=0)
                 
-        self.beta = 2
-        self.gamma = 1
-        # self.beta = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)  ## initial value matters, if we choose 1.5 then it fails
-        # self.gamma = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)
+        # self.beta = 2.3
+        # self.gamma = 1
+        self.beta = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)  ## initial value matters, if we choose 1.5 then it fails
+        self.gamma = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)
         
     def forward(self, t, y, integro):
         S, I, R = torch.split(y,1,dim=1)
         # print('asfafasfasfsafasfd', I.shape, integro.shape)
 
         dSdt = -self.beta * S * I + integro# + self.memory(I)#sum(pre*dist)*dx
-        # dIdt = self.beta * S * I - self.gamma * I
-        dIdt = self.NN(torch.cat((S,R),1))
+        dIdt = self.beta * S * I - self.gamma * I
+        # dIdt = self.NN(torch.cat((S,R),1))
         dRdt = self.gamma * I - integro#- self.memory(I)#sum(pre*dist)*dx
         
         # print('asdf', integro)
@@ -123,9 +140,17 @@ class ODEFunc(nn.Module):
         return integro
     
 if __name__ == '__main__':
+    Erlang = False
+    
+    if Erlang==True:
+        data = np.load('../data/train_sir_l.npy')
+        dist = np.load('../data/dist_l.npy')
+        t = torch.linspace(0., 15, 1000).to(device)
+    else:   
+        data = np.load('../data/train_sir_l_norm.npy')
+        dist = np.load('../data/dist_l_norm.npy')
+        t = torch.linspace(0., 25, 100).to(device)
 
-    data = np.load('../data/train_sir_l.npy')
-    t = torch.linspace(0., 15, 1000).to(device)
     
     k = 1
     t = t[::k]
@@ -140,14 +165,14 @@ if __name__ == '__main__':
     y = torch.tensor(data, dtype=torch.float32).to(device)
     
     y0 = y[[0],0,:].to(device)
-    pred_y = odeint(func, func_m, y0, t, method='dopri5').to(device)
-    # pred_y = odeint(func, func_m, y0, t, method='euler').to(device)
+    # pred_y = odeint(func, func_m, y0, t, method='dopri5').to(device)
+    pred_y = odeint(func, func_m, y0, t, method='euler').to(device)
     plt.plot(pred_y[:,0,:].cpu().detach(), label=['S', 'I', 'R'])
     plt.plot(data[0])
     plt.legend()
     
     
-    """
+    
     # optimizer = optim.Adam(func.parameters(), lr=1e-3)
     optimizer = optim.Adam([
                     {'params': func.parameters()},
@@ -217,7 +242,7 @@ if __name__ == '__main__':
     ax[0].plot(batch_y[0].detach().cpu())
 
     
-    dist = np.load('../data/dist_l.npy')
+
     K = func_m(t.reshape(-1,1))
     ax[1].plot(K.detach().cpu().numpy()[::-1], label='dist pred')
     ax[1].plot(dist[::k], label='dist')
@@ -225,4 +250,4 @@ if __name__ == '__main__':
     
     # fig.savefig('./figures/unkonw_dist.png')
     
-    """
+    
