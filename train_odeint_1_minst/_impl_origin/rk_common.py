@@ -6,7 +6,7 @@ from .interp import _interp_evaluate, _interp_fit
 from .misc import (_compute_error_ratio,
                    _select_initial_step,
                    _optimal_step_size)
-from .misc import Perturb
+from .misc import Perturb, RegularGridInterpolator
 from .solvers import AdaptiveStepsizeEventODESolver
 
 
@@ -38,7 +38,52 @@ class _UncheckedAssign(torch.autograd.Function):
         return grad_scratch, grad_scratch[ctx.index], None
 
 
-def _runge_kutta_step(func, y0, f0, t0, dt, t1, tableau):
+
+def integration(solution, K, t_, t, j):
+    # print('sdfsfdsfsf', solution.shape, K.shape)
+    
+    # S, I, R = torch.split(solution, 1, dim=2)
+    # https://discuss.pytorch.org/t/one-of-the-variables-required-has-been-modified-by-inplace-operation/104328
+    I = solution.clone()#.transpose(1,0)  ######clone ???????
+    # print('sfaf: ', I.shape, K.shape)
+    
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    
+    # dt_new = .01 #(t_[j]/100).item() #
+    # # print(t_[j].item(), dt_new)
+    # points_to_interp = [torch.arange(0, t_[j].item(), dt_new).to(device)]
+    # # print('points: ', points_to_interp)
+    # K_inv = torch.flip(K, dims=(0,))#.clone()
+    # K_inter = RegularGridInterpolator([t], K_inv.flatten()) ####should be inversed ????????
+    # K_new = K_inter(points_to_interp)
+    # K_new = torch.flip(K_new, dims=(0,))
+    # # print('fffasdf', K_new)
+    # # print(t[:j].shape, I.shape)
+    # I_inter = RegularGridInterpolator([t_[:j]], I.flatten())
+    # I_new = I_inter(points_to_interp)
+    # # print('asdfasdfasdf')
+    # # print(I_new[:10], I[0,:10,0])
+    # # print(I_new.shape, I.shape)
+    # # print(K_new.shape, K.shape)
+    
+    # integro = I_new*K_new
+    I = I.transpose(4,0)
+    K = K.flatten()
+    # I = I.reshape([])
+    # print('asdfasdf', I.shape, K[:j].shape)
+    integro = I*K[:j]
+    # print(I.shape)
+    # # print('safdasfasfd', integro.shape)
+    # integro = torch.sum(integro)*dt_new
+    integro = torch.sum(integro)* 0.0101
+    # print(integro)
+    
+    # integro = I*K
+    # # print('safdasfasfd', integro.shape)
+    # integro = torch.sum(integro, dim=1)*dt
+    return integro
+    
+def _runge_kutta_step(func, y0, f0, t0, dt, t1, solution, K, t, j, tableau):
     """Take an arbitrary Runge-Kutta step and estimate error.
     Args:
         func: Function to evaluate like `func(t, y)` to compute the time derivative of `y`.
@@ -59,7 +104,7 @@ def _runge_kutta_step(func, y0, f0, t0, dt, t1, tableau):
     t0 = t0.to(y0.dtype)
     dt = dt.to(y0.dtype)
     t1 = t1.to(y0.dtype)
-
+    # print(solution.shape)
     # We use an unchecked assign to put data into k without incrementing its _version counter, so that the backward
     # doesn't throw an (overzealous) error about in-place correctness. We know that it's actually correct.
     k = torch.empty(*f0.shape, len(tableau.alpha) + 1, dtype=y0.dtype, device=y0.device)
@@ -73,7 +118,15 @@ def _runge_kutta_step(func, y0, f0, t0, dt, t1, tableau):
             ti = t0 + alpha_i * dt
             perturb = Perturb.NONE
         yi = y0 + torch.sum(k[..., :i + 1] * (beta_i * dt), dim=-1).view_as(f0)
-        f = func(ti, yi, perturb=perturb)
+        
+        t_ = t.clone()
+        # print(t_)
+        t_[j] = ti
+        # print(j,t_[j],t_)
+        integro = integration(solution, K, t_, t, j)
+        # print('integro', integro)
+        
+        f = func(ti, yi, integro, perturb=perturb)
         k = _UncheckedAssign.apply(k, f, (..., i + 1))
 
     if not (tableau.c_sol[-1] == 0 and (tableau.c_sol[:-1] == tableau.beta[-1]).all()):
@@ -119,7 +172,7 @@ class RKAdaptiveStepsizeODESolver(AdaptiveStepsizeEventODESolver):
     tableau: _ButcherTableau
     mid: torch.Tensor
 
-    def __init__(self, func, y0, rtol, atol,
+    def __init__(self, func, y0, K, rtol, atol,
                  min_step=0,
                  max_step=float('inf'),
                  first_step=None,
@@ -149,7 +202,8 @@ class RKAdaptiveStepsizeODESolver(AdaptiveStepsizeEventODESolver):
         self.dfactor = torch.as_tensor(dfactor, dtype=dtype, device=device)
         self.max_num_steps = torch.as_tensor(max_num_steps, dtype=torch.int32, device=device)
         self.dtype = dtype
-
+        self.K = K
+        
         self.step_t = None if step_t is None else torch.as_tensor(step_t, dtype=dtype, device=device)
         self.jump_t = None if jump_t is None else torch.as_tensor(jump_t, dtype=dtype, device=device)
 
@@ -168,10 +222,14 @@ class RKAdaptiveStepsizeODESolver(AdaptiveStepsizeEventODESolver):
 
     def _before_integrate(self, t):
         t0 = t[0]
-        f0 = self.func(t[0], self.y0)
+        integro_0 = self.y0*self.K[-1]*(t[1]-t[0])
+        # print('kkkk', integro_0.shape)
+        f0 = self.func(t[0], self.y0, integro_0)
+        # print(f0)
         if self.first_step is None:
-            first_step = _select_initial_step(self.func, t[0], self.y0, self.order - 1, self.rtol, self.atol,
+            first_step = _select_initial_step(self.func, t[0], self.y0, self.K, self.order - 1, self.rtol, self.atol,
                                               self.norm, f0=f0)
+            # print('first_step', first_step)
         else:
             first_step = self.first_step
         self.rk_state = _RungeKuttaState(self.y0, f0, t[0], t[0], first_step, [self.y0] * 5)
@@ -196,12 +254,13 @@ class RKAdaptiveStepsizeODESolver(AdaptiveStepsizeEventODESolver):
         self.next_step_index = min(bisect.bisect(self.step_t.tolist(), t[0]), len(self.step_t) - 1)
         self.next_jump_index = min(bisect.bisect(self.jump_t.tolist(), t[0]), len(self.jump_t) - 1)
 
-    def _advance(self, next_t):
+    def _advance(self, next_t, solution, K, t, j):
         """Interpolate through the next time point, integrating as necessary."""
         n_steps = 0
+        # print(solution.shape)
         while next_t > self.rk_state.t1:
             assert n_steps < self.max_num_steps, 'max_num_steps exceeded ({}>={})'.format(n_steps, self.max_num_steps)
-            self.rk_state = self._adaptive_step(self.rk_state)
+            self.rk_state = self._adaptive_step(self.rk_state, solution, self.K, t, j)
             n_steps += 1
         return _interp_evaluate(self.rk_state.interp_coeff, self.rk_state.t0, self.rk_state.t1, next_t)
 
@@ -219,7 +278,7 @@ class RKAdaptiveStepsizeODESolver(AdaptiveStepsizeEventODESolver):
         interp_fn = lambda t: _interp_evaluate(self.rk_state.interp_coeff, self.rk_state.t0, self.rk_state.t1, t)
         return find_event(interp_fn, sign0, self.rk_state.t0, self.rk_state.t1, event_fn, self.atol)
 
-    def _adaptive_step(self, rk_state):
+    def _adaptive_step(self, rk_state, solution, K, t, j):
         """Take an adaptive Runge-Kutta step to integrate the ODE."""
         y0, f0, _, t0, dt, interp_coeff = rk_state
         self.func.callback_step(t0, y0, dt)
@@ -262,8 +321,7 @@ class RKAdaptiveStepsizeODESolver(AdaptiveStepsizeEventODESolver):
 
         # Must be arranged as doing all the step_t handling, then all the jump_t handling, in case we
         # trigger both. (i.e. interleaving them would be wrong.)
-
-        y1, f1, y1_error, k = _runge_kutta_step(self.func, y0, f0, t0, dt, t1, tableau=self.tableau)
+        y1, f1, y1_error, k = _runge_kutta_step(self.func, y0, f0, t0, dt, t1, solution, K, t, j, tableau=self.tableau)
         # dtypes:
         # y1.dtype == self.y0.dtype
         # f1.dtype == self.y0.dtype
@@ -321,7 +379,42 @@ class RKAdaptiveStepsizeODESolver(AdaptiveStepsizeEventODESolver):
         f1 = k[..., -1]
         return _interp_fit(y0, y1, y_mid, f0, f1, dt)
 
-
+    def integration(self, solution, K, dt, t, j):
+        # print('sdfsfdsfsf', solution.shape, K.shape)
+        
+        # S, I, R = torch.split(solution, 1, dim=2)
+        # https://discuss.pytorch.org/t/one-of-the-variables-required-has-been-modified-by-inplace-operation/104328
+        I = solution.clone().transpose(1,0)  ######clone ???????
+        # print('sfaf: ', I.shape, K.shape)
+        
+        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        
+        dt_new = .01
+        points_to_interp = [torch.arange(0, t[j], dt_new).to(device)]
+        K_inv = torch.flip(self.K, dims=(0,))#.clone()
+        K_inter = RegularGridInterpolator([t], K_inv.flatten()) ####should be inversed ????????
+        K_new = K_inter(points_to_interp)
+        K_new = torch.flip(K_new, dims=(0,))
+        # print(K_new)
+        # print(t[:j].shape, I.shape)
+        I_inter = RegularGridInterpolator([t[:j]], I.flatten())
+        I_new = I_inter(points_to_interp)
+        # print('asdfasdfasdf')
+        # print(I_new[:10], I[0,:10,0])
+        # print(I_new.shape, I.shape)
+        # print(K_new.shape, K.shape)
+        
+        integro = I_new*K_new
+        # # print('safdasfasfd', integro.shape)
+        integro = torch.sum(integro)*dt_new
+        # print(integro)
+        
+        # integro = I*K
+        # # print('safdasfasfd', integro.shape)
+        # integro = torch.sum(integro, dim=1)*dt
+        return integro
+    
+    
 def _sort_tvals(tvals, t0):
     # TODO: add warning if tvals come before t0?
     tvals = tvals[tvals >= t0]

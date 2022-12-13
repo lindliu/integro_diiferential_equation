@@ -182,6 +182,32 @@ if Erlang==True:
 else:
     np.save('./data/train_sir_l_norm.npy', SIR_batch)
     np.save('./data/dist_l_norm.npy', dist)
+    
+    
+    
+    
+    
+    
+# fig, ax = plt.subplots(2,2,figsize=(10,5))
+# ax = ax.flatten()
+
+# SIR_Erlang = np.load('./data/train_sir_l.npy')
+# ax[0].plot(SIR_Erlang[0], label=['s','i','r'])
+# ax[0].legend()
+
+# Erlang = np.load('./data/dist_l.npy')
+# ax[1].plot(Erlang, label='Erlang')
+# ax[1].legend()
+
+# SIR_Gaussian = np.load('./data/train_sir_l_norm.npy')
+# ax[2].plot(SIR_Gaussian[0], label=['s','i','r'])
+# ax[2].legend()
+
+# Gaussian = np.load('./data/dist_l_norm.npy')
+# ax[3].plot(Gaussian, label='Gaussian')
+# ax[3].legend()
+
+
 
 
 

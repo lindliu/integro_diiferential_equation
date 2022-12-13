@@ -1,24 +1,128 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Wed Oct  5 10:06:35 2022
+Created on Tue Nov 29 11:19:49 2022
 
 @author: dliu
 """
 
-
-import matplotlib.pyplot as plt
-# from torchdiffeq import odeint
+import os
+import argparse
+import logging
+import time
 import numpy as np
-
-# from _impl import odeint
-from _impl_origin import odeint
-
 import torch
 import torch.nn as nn
-import torch.optim as optim
+from torch.utils.data import DataLoader
+import torchvision.datasets as datasets
+import torchvision.transforms as transforms
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--network', type=str, choices=['resnet', 'odenet'], default='odenet')
+parser.add_argument('--tol', type=float, default=1e-3)
+parser.add_argument('--adjoint', type=eval, default=False, choices=[True, False])
+parser.add_argument('--downsampling-method', type=str, default='conv', choices=['conv', 'res'])
+parser.add_argument('--nepochs', type=int, default=160)
+parser.add_argument('--data_aug', type=eval, default=True, choices=[True, False])
+parser.add_argument('--lr', type=float, default=0.1)
+parser.add_argument('--batch_size', type=int, default=1)
+parser.add_argument('--test_batch_size', type=int, default=1)
+
+parser.add_argument('--save', type=str, default='./experiment1')
+parser.add_argument('--debug', action='store_true')
+parser.add_argument('--gpu', type=int, default=0)
+args = parser.parse_args()
+
+if args.adjoint:
+    from torchdiffeq import odeint_adjoint as odeint
+else:
+    from _impl_origin import odeint
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+
+def conv3x3(in_planes, out_planes, stride=1):
+    """3x3 convolution with padding"""
+    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
+
+
+def conv1x1(in_planes, out_planes, stride=1):
+    """1x1 convolution"""
+    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
+
+
+def norm(dim):
+    return nn.GroupNorm(min(32, dim), dim)
+
+
+class ResBlock(nn.Module):
+    expansion = 1
+
+    def __init__(self, inplanes, planes, stride=1, downsample=None):
+        super(ResBlock, self).__init__()
+        self.norm1 = norm(inplanes)
+        self.relu = nn.ReLU(inplace=True)
+        self.downsample = downsample
+        self.conv1 = conv3x3(inplanes, planes, stride)
+        self.norm2 = norm(planes)
+        self.conv2 = conv3x3(planes, planes)
+
+    def forward(self, x):
+        shortcut = x
+
+        out = self.relu(self.norm1(x))
+
+        if self.downsample is not None:
+            shortcut = self.downsample(out)
+
+        out = self.conv1(out)
+        out = self.norm2(out)
+        out = self.relu(out)
+        out = self.conv2(out)
+
+        return out + shortcut
+
+
+class ConcatConv2d(nn.Module):
+
+    def __init__(self, dim_in, dim_out, ksize=3, stride=1, padding=0, dilation=1, groups=1, bias=True, transpose=False):
+        super(ConcatConv2d, self).__init__()
+        module = nn.ConvTranspose2d if transpose else nn.Conv2d
+        self._layer = module(
+            dim_in + 1, dim_out, kernel_size=ksize, stride=stride, padding=padding, dilation=dilation, groups=groups,
+            bias=bias
+        )
+
+    def forward(self, t, x):
+        tt = torch.ones_like(x[:, :1, :, :]) * t
+        ttx = torch.cat([tt, x], 1)
+        return self._layer(ttx)
+
+
+class ODEfunc(nn.Module):
+
+    def __init__(self, dim):
+        super(ODEfunc, self).__init__()
+        self.norm1 = norm(dim)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv1 = ConcatConv2d(dim, dim, 3, 1, 1)
+        self.norm2 = norm(dim)
+        self.conv2 = ConcatConv2d(dim, dim, 3, 1, 1)
+        self.norm3 = norm(dim)
+        self.nfe = 0
+
+    def forward(self, t, x, integro):
+        self.nfe += 1
+        # print(x.shape, integro.shape)
+        # print(integro.shape)
+        out = self.norm1(x)+integro
+        out = self.relu(out)
+        out = self.conv1(t, out)
+        out = self.norm2(out)
+        out = self.relu(out)
+        out = self.conv2(t, out)
+        out = self.norm3(out)
+        return out
 
 
 class Memory(nn.Module):    
@@ -36,188 +140,288 @@ class Memory(nn.Module):
             # nn.ReLU()
             nn.Sigmoid()
         )
-    def forward(self, t):
-        return self.memory(t)
-
-
-# t = torch.linspace(0., 15, 1000).to(device)
-# dist = np.load('../data/dist_l.npy')
-# dist = torch.tensor(dist, dtype=torch.float32).to(device)
-
-# batch_t = t.reshape(-1,1)
-# batch_dist = dist.reshape(-1,1)
-
-# func_m = Memory().to(device)
-# optimizer = optim.RMSprop(func_m.parameters(), lr=1e-3)
-
-# for itr in range(1, 20000):
-#     optimizer.zero_grad()
-    
-#     pred_dist = func_m(batch_t)
-#     pred_dist = torch.flip(pred_dist, dims=(0,))
-#     loss = nn.functional.mse_loss(pred_dist, batch_dist)
-
-#     loss.backward()
-#     optimizer.step()
-    
-#     if itr%1000==0:
-#         print(loss.item())
-
-# pred_dist = func_m(batch_t)  
-# plt.plot(pred_dist.cpu().detach().numpy()[::-1])
-# plt.plot(batch_dist.cpu())
-
-
-
-
-
-class ODEFunc(nn.Module):
-
-    def __init__(self):
-        super(ODEFunc, self).__init__()
-
-        self.NN = nn.Sequential(
-            nn.Linear(2, 20),
-            nn.Tanh(),
-            nn.Linear(20, 20),
-            nn.Tanh(),
-            nn.Linear(20, 20),
-            nn.Tanh(),
-            nn.Linear(20, 1)
-            # nn.Sigmoid()
-        )
-
-        for m in self.NN.modules():
+        
+        for m in self.memory.modules():
             if isinstance(m, nn.Linear):
-                nn.init.normal_(m.weight, mean=0, std=0.1)
+                nn.init.normal_(m.weight, mean=0, std=0.01)
                 nn.init.constant_(m.bias, val=0)
                 
-        self.beta = 2
-        self.gamma = 1
-        # self.beta = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)  ## initial value matters, if we choose 1.5 then it fails
-        # self.gamma = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)
         
-    def forward(self, t, y, integro):
-        S, I, R = torch.split(y,1,dim=1)
-        # print('asfafasfasfsafasfd', I.shape, integro.shape)
-
-        dSdt = -self.beta * S * I + integro# + self.memory(I)#sum(pre*dist)*dx
-        # dIdt = self.beta * S * I - self.gamma * I
-        dIdt = self.NN(torch.cat((S,R),1))
-        dRdt = self.gamma * I - integro#- self.memory(I)#sum(pre*dist)*dx
-        return torch.cat((dSdt,dIdt,dRdt),1)
-    
-    def integration(self, solution, K, dt):
-        # print('sdfsfdsfsf', solution.shape, K.shape)
+        self.mu = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)  ## initial value matters, if we choose 1.5 then it fails
+        self.sigma = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)
         
-        S, I, R = torch.split(solution, 1, dim=2)
-        # https://discuss.pytorch.org/t/one-of-the-variables-required-has-been-modified-by-inplace-operation/104328
-        I = I.clone().transpose(1,0)  ######clone ???????
-        # print('sfaf: ', I.shape, K.shape)
-
-        integro = I*K
-        # print('safdasfasfd', integro.shape)
-        integro = torch.sum(integro, dim=1)*dt
-        return integro
+    # def forward(self, t):
+    #     return self.memory(t)
     
+    def forward(self, t):
+        return 1/(self.sigma*(2*torch.pi)**.5)*torch.exp(-1/2*(t-self.mu)**2/self.sigma**2)
+
+func_m = Memory().to(device)
+method = 'dopri5' ## 'euler'
+
+class ODEBlock(nn.Module):
+
+    def __init__(self, odefunc):
+        super(ODEBlock, self).__init__()
+        self.odefunc = odefunc
+        self.integration_time = torch.linspace(0,1,100).float().to(device)
+
+    def forward(self, x):
+        self.integration_time = self.integration_time.type_as(x)
+        # out = odeint(self.odefunc, x, self.integration_time, rtol=args.tol, atol=args.tol)
+        out = odeint(self.odefunc, func_m, x, self.integration_time, rtol=args.tol, atol=args.tol, method=method).to(device)
+
+        return out[1]
+
+    @property
+    def nfe(self):
+        return self.odefunc.nfe
+
+    @nfe.setter
+    def nfe(self, value):
+        self.odefunc.nfe = value
+
+
+class Flatten(nn.Module):
+
+    def __init__(self):
+        super(Flatten, self).__init__()
+
+    def forward(self, x):
+        shape = torch.prod(torch.tensor(x.shape[1:])).item()
+        return x.view(-1, shape)
+
+
+class RunningAverageMeter(object):
+    """Computes and stores the average and current value"""
+
+    def __init__(self, momentum=0.99):
+        self.momentum = momentum
+        self.reset()
+
+    def reset(self):
+        self.val = None
+        self.avg = 0
+
+    def update(self, val):
+        if self.val is None:
+            self.avg = val
+        else:
+            self.avg = self.avg * self.momentum + val * (1 - self.momentum)
+        self.val = val
+
+
+def get_mnist_loaders(data_aug=False, batch_size=128, test_batch_size=1000, perc=1.0):
+    if data_aug:
+        transform_train = transforms.Compose([
+            transforms.RandomCrop(28, padding=4),
+            transforms.ToTensor(),
+        ])
+    else:
+        transform_train = transforms.Compose([
+            transforms.ToTensor(),
+        ])
+
+    transform_test = transforms.Compose([
+        transforms.ToTensor(),
+    ])
+
+    train_loader = DataLoader(
+        datasets.MNIST(root='.data/mnist', train=True, download=True, transform=transform_train), batch_size=batch_size,
+        shuffle=True, num_workers=2, drop_last=True
+    )
+
+    train_eval_loader = DataLoader(
+        datasets.MNIST(root='.data/mnist', train=True, download=True, transform=transform_test),
+        batch_size=test_batch_size, shuffle=False, num_workers=2, drop_last=True
+    )
+
+    test_loader = DataLoader(
+        datasets.MNIST(root='.data/mnist', train=False, download=True, transform=transform_test),
+        batch_size=test_batch_size, shuffle=False, num_workers=2, drop_last=True
+    )
+
+    return train_loader, test_loader, train_eval_loader
+
+
+def inf_generator(iterable):
+    """Allows training with DataLoaders in a single infinite loop:
+        for i, (x, y) in enumerate(inf_generator(train_loader)):
+    """
+    iterator = iterable.__iter__()
+    while True:
+        try:
+            yield iterator.__next__()
+        except StopIteration:
+            iterator = iterable.__iter__()
+
+
+def learning_rate_with_decay(batch_size, batch_denom, batches_per_epoch, boundary_epochs, decay_rates):
+    initial_learning_rate = args.lr * batch_size / batch_denom
+
+    boundaries = [int(batches_per_epoch * epoch) for epoch in boundary_epochs]
+    vals = [initial_learning_rate * decay for decay in decay_rates]
+
+    def learning_rate_fn(itr):
+        lt = [itr < b for b in boundaries] + [True]
+        i = np.argmax(lt)
+        return vals[i]
+
+    return learning_rate_fn
+
+
+def one_hot(x, K):
+    return np.array(x[:, None] == np.arange(K)[None, :], dtype=int)
+
+
+def accuracy(model, dataset_loader):
+    total_correct = 0
+    for x, y in dataset_loader:
+        x = x.to(device)
+        y = one_hot(np.array(y.numpy()), 10)
+
+        target_class = np.argmax(y, axis=1)
+        predicted_class = np.argmax(model(x).cpu().detach().numpy(), axis=1)
+        total_correct += np.sum(predicted_class == target_class)
+    return total_correct / len(dataset_loader.dataset)
+
+
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+def makedirs(dirname):
+    if not os.path.exists(dirname):
+        os.makedirs(dirname)
+
+
+def get_logger(logpath, filepath, package_files=[], displaying=True, saving=True, debug=False):
+    logger = logging.getLogger()
+    if debug:
+        level = logging.DEBUG
+    else:
+        level = logging.INFO
+    logger.setLevel(level)
+    if saving:
+        info_file_handler = logging.FileHandler(logpath, mode="a")
+        info_file_handler.setLevel(level)
+        logger.addHandler(info_file_handler)
+    if displaying:
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(level)
+        logger.addHandler(console_handler)
+    logger.info(filepath)
+    with open(filepath, "r") as f:
+        logger.info(f.read())
+
+    for f in package_files:
+        logger.info(f)
+        with open(f, "r") as package_f:
+            logger.info(package_f.read())
+
+    return logger
+
+
 if __name__ == '__main__':
 
-    data = np.load('../data/train_sir_l.npy')
-    t = torch.linspace(0., 15, 1000).to(device)
-    
-    k = 1
-    t = t[::k]
-    data = data[:, ::k, :]
+    makedirs(args.save)
+    logger = get_logger(logpath=os.path.join(args.save, 'logs'), filepath=os.path.abspath(__file__))
+    logger.info(args)
 
-    # data = np.load('../data/train_sir.npy')
-    # k = 5
-    # t = torch.linspace(0., 80./k, 200//k).to(device)
-    
-    func_m = Memory().to(device)
-    func = ODEFunc().to(device)
-    y = torch.tensor(data, dtype=torch.float32).to(device)
-    
-    # y0 = y[:,0,:].to(device)
-    # pred_y = odeint(func, func_m, y0, t, method='euler').to(device)
-    # plt.plot(pred_y[:,0,:].cpu().detach(), label=['S', 'I', 'R'])
-    # plt.plot(data[0])
-    # plt.legend()
-    
-    
+    device = torch.device('cuda:' + str(args.gpu) if torch.cuda.is_available() else 'cpu')
 
-    # optimizer = optim.Adam(func.parameters(), lr=1e-3)
-    optimizer = optim.Adam([
-                    {'params': func.parameters()},
-                    {'params': func_m.parameters(), 'lr': 1e-3}
-                ], lr=1e-4)
-    
-    batch_size = 1
-    batch = data
-    batch_y = torch.tensor(batch, dtype=torch.float32).to(device)
-    batch_y0 = batch_y[:,0,:].to(device)
-    
-    batch_t = t
-    for itr in range(1, 30000):
-        # idx = np.random.choice(np.arange(data.shape[0]),batch_size)
-        idx = np.array([0])
-        batch_y = torch.tensor(data[idx, ...], dtype=torch.float32).to(device)
-        batch_y0 = batch_y[:,0,:].to(device)
+    is_odenet = args.network == 'odenet'
+
+    if args.downsampling_method == 'conv':
+        downsampling_layers = [
+            nn.Conv2d(1, 64, 3, 1),
+            norm(64),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 64, 4, 2, 1),
+            norm(64),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 64, 4, 2, 1),
+        ]
+    elif args.downsampling_method == 'res':
+        downsampling_layers = [
+            nn.Conv2d(1, 64, 3, 1),
+            ResBlock(64, 64, stride=2, downsample=conv1x1(64, 64, 2)),
+            ResBlock(64, 64, stride=2, downsample=conv1x1(64, 64, 2)),
+        ]
+
+    feature_layers = [ODEBlock(ODEfunc(64))] if is_odenet else [ResBlock(64, 64) for _ in range(6)]
+    fc_layers = [norm(64), nn.ReLU(inplace=True), nn.AdaptiveAvgPool2d((1, 1)), Flatten(), nn.Linear(64, 10)]
+
+    model = nn.Sequential(*downsampling_layers, *feature_layers, *fc_layers).to(device)
+
+    logger.info(model)
+    logger.info('Number of parameters: {}'.format(count_parameters(model)))
+
+    criterion = nn.CrossEntropyLoss().to(device)
+
+    train_loader, test_loader, train_eval_loader = get_mnist_loaders(
+        args.data_aug, args.batch_size, args.test_batch_size
+    )
+
+    data_gen = inf_generator(train_loader)
+    batches_per_epoch = len(train_loader)
+
+    lr_fn = learning_rate_with_decay(
+        args.batch_size, batch_denom=128, batches_per_epoch=batches_per_epoch, boundary_epochs=[60, 100, 140],
+        decay_rates=[1, 0.1, 0.01, 0.001]
+    )
+
+    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
+
+    best_acc = 0
+    batch_time_meter = RunningAverageMeter()
+    f_nfe_meter = RunningAverageMeter()
+    b_nfe_meter = RunningAverageMeter()
+    end = time.time()
+
+    for itr in range(args.nepochs * batches_per_epoch):
+
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr_fn(itr)
 
         optimizer.zero_grad()
-        pred_y = odeint(func, func_m, batch_y0, batch_t, method='euler').to(device)
-        pred_y = pred_y.transpose(1,0)
-        loss = torch.mean(torch.abs(pred_y - batch_y))
+        x, y = data_gen.__next__()
+        x = x.to(device)
+        y = y.to(device)
+        logits = model(x)
+        loss = criterion(logits, y)
+        print('loss: ', loss)
+        if is_odenet:
+            nfe_forward = feature_layers[0].nfe
+            feature_layers[0].nfe = 0
+
         loss.backward()
         optimizer.step()
-        
-        if itr%10==0:
-            print(f'itr: {itr}, loss: {loss.item():.6f}')
-            try:
-                print(f'beta: {func.beta.item():.3f}, gamma: {func.gamma.item():.3f}')
-            except:
-                continue
-            
-    ## unknown dist; unknown dIdt as neural network; known gamma beta
-    torch.save(func_m.state_dict(), f'../models/func_m_N_{device.type}.pt') ### train 1800 iters, loss=0.001
-    torch.save(func.state_dict(), f'../models/func_N_{device.type}.pt')
-    
-    # ### unknown dist; known dIdt; unknown gamma beta
-    # torch.save(func_m.state_dict(), f'../models/func_m_p_{device.type}.pt') ### train 26000 iters, loss=0.001
-    # torch.save(func.state_dict(), f'../models/func_p_{device.type}.pt')
 
-    # ## unknown dist; known dIdt; known gamma beta
-    # torch.save(func_m.state_dict(), f'../models/func_m_{device.type}.pt') ### train 7000 iters, loss=0.001
-    # torch.save(func.state_dict(), f'../models/func_{device.type}.pt') 
-    
-    
-    
-    
-    func_m.load_state_dict(torch.load(f'../models/func_m_N_{device.type}.pt'))
-    func.load_state_dict(torch.load(f'../models/func_N_{device.type}.pt'))
-    
-    # func_m.load_state_dict(torch.load(f'../models/func_m_p_{device.type}.pt')) 
-    # func.load_state_dict(torch.load(f'../models/func_p_{device.type}.pt'))
-    
-    # func_m.load_state_dict(torch.load(f'../models/func_m_{device.type}.pt'))
-    # func.load_state_dict(torch.load(f'../models/func_{device.type}.pt'))
+        if is_odenet:
+            nfe_backward = feature_layers[0].nfe
+            feature_layers[0].nfe = 0
 
+        batch_time_meter.update(time.time() - end)
+        if is_odenet:
+            f_nfe_meter.update(nfe_forward)
+            b_nfe_meter.update(nfe_backward)
+        end = time.time()
 
-    idx = np.random.choice(np.arange(data.shape[0]),batch_size)
-    batch_y = torch.tensor(data[idx, ...], dtype=torch.float32).to(device)
-    batch_y0 = batch_y[:,0,:].to(device)
-    
-    pred_y = odeint(func, func_m, batch_y0, batch_t, method='euler').to(device)
-    pred_y = pred_y.transpose(1,0)
-    
-    fig, ax = plt.subplots(1,2,figsize=(10,4))
-    ax[0].plot(pred_y[0].detach().cpu())
-    ax[0].plot(batch_y[0].detach().cpu())
-
-    
-    dist = np.load('../data/dist_l.npy')
-    K = func_m(t.reshape(-1,1))
-    ax[1].plot(K.detach().cpu().numpy()[::-1], label='dist pred')
-    ax[1].plot(dist[::k], label='dist')
-    ax[1].legend()
-    
-    # fig.savefig('./figures/unkonw_dist.png')
+        if itr % batches_per_epoch == 0:
+            with torch.no_grad():
+                train_acc = accuracy(model, train_eval_loader)
+                val_acc = accuracy(model, test_loader)
+                if val_acc > best_acc:
+                    torch.save({'state_dict': model.state_dict(), 'args': args}, os.path.join(args.save, 'model.pth'))
+                    best_acc = val_acc
+                logger.info(
+                    "Epoch {:04d} | Time {:.3f} ({:.3f}) | NFE-F {:.1f} | NFE-B {:.1f} | "
+                    "Train Acc {:.4f} | Test Acc {:.4f}".format(
+                        itr // batches_per_epoch, batch_time_meter.val, batch_time_meter.avg, f_nfe_meter.avg,
+                        b_nfe_meter.avg, train_acc, val_acc
+                    )
+                )
+                
+                
+    # plt.imshow(x[0,0].cpu())

@@ -109,16 +109,16 @@ class ODEFunc(nn.Module):
                 nn.init.normal_(m.weight, mean=0, std=0.01)
                 nn.init.constant_(m.bias, val=0)
                 
-        # self.beta = 2.3
-        # self.gamma = 1
-        self.beta = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)  ## initial value matters, if we choose 1.5 then it fails
-        self.gamma = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)
+        self.beta = 2.3
+        self.gamma = 1
+        # self.beta = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)  ## initial value matters, if we choose 1.5 then it fails
+        # self.gamma = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)
         
     def forward(self, t, y, integro):
         S, I, R = torch.split(y,1,dim=1)
         # print('asfafasfasfsafasfd', I.shape, integro.shape)
 
-        dSdt = -self.beta * S * I + integro# + self.memory(I)#sum(pre*dist)*dx
+        dSdt = -self.beta * S * I + integro
         dIdt = self.beta * S * I - self.gamma * I
         # dIdt = self.NN(torch.cat((S,R),1))
         dRdt = self.gamma * I - integro#- self.memory(I)#sum(pre*dist)*dx
@@ -146,16 +146,16 @@ if __name__ == '__main__':
         data = np.load('../data/train_sir_l.npy')
         dist = np.load('../data/dist_l.npy')
         t = torch.linspace(0., 15, 1000).to(device)
-    else:   
+    else:
         data = np.load('../data/train_sir_l_norm.npy')
         dist = np.load('../data/dist_l_norm.npy')
         t = torch.linspace(0., 25, 100).to(device)
 
-    
     k = 1
     t = t[::k]
     data = data[:, ::k, :]
-
+    
+    method = 'dopri5' ## 'euler'
     # data = np.load('../data/train_sir.npy')
     # k = 5
     # t = torch.linspace(0., 80./k, 200//k).to(device)
@@ -165,8 +165,8 @@ if __name__ == '__main__':
     y = torch.tensor(data, dtype=torch.float32).to(device)
     
     y0 = y[[0],0,:].to(device)
-    # pred_y = odeint(func, func_m, y0, t, method='dopri5').to(device)
-    pred_y = odeint(func, func_m, y0, t, method='euler').to(device)
+    pred_y = odeint(func, func_m, y0, t, method=method).to(device)
+    # pred_y = odeint(func, func_m, y0, t, method='euler').to(device)
     plt.plot(pred_y[:,0,:].cpu().detach(), label=['S', 'I', 'R'])
     plt.plot(data[0])
     plt.legend()
@@ -192,13 +192,14 @@ if __name__ == '__main__':
         batch_y0 = batch_y[:,0,:].to(device)
 
         optimizer.zero_grad()
-        pred_y = odeint(func, func_m, batch_y0, batch_t, method='euler').to(device)
+        pred_y = odeint(func, func_m, batch_y0, batch_t, method=method).to(device)
+        # pred_y = odeint(func, func_m, batch_y0, batch_t, method='euler').to(device)
         pred_y = pred_y.transpose(1,0)
         loss = torch.mean(torch.abs(pred_y - batch_y))
         loss.backward()
         optimizer.step()
         
-        if itr%10==0:
+        if itr%1==0:
             print(f'itr: {itr}, loss: {loss.item():.6f}')
             try:
                 print(f'beta: {func.beta.item():.3f}, gamma: {func.gamma.item():.3f}')
@@ -234,7 +235,8 @@ if __name__ == '__main__':
     batch_y = torch.tensor(data[idx, ...], dtype=torch.float32).to(device)
     batch_y0 = batch_y[:,0,:].to(device)
     
-    pred_y = odeint(func, func_m, batch_y0, batch_t, method='euler').to(device)
+    pred_y = odeint(func, func_m, batch_y0, batch_t, method=method).to(device)
+    # pred_y = odeint(func, func_m, batch_y0, batch_t, method='euler').to(device)
     pred_y = pred_y.transpose(1,0)
     
     fig, ax = plt.subplots(1,2,figsize=(10,4))

@@ -33,7 +33,7 @@ def _mixed_norm(tensor_tuple):
     return max([_rms_norm(tensor) for tensor in tensor_tuple])
 
 
-def _select_initial_step(func, t0, y0, order, rtol, atol, norm, f0=None):
+def _select_initial_step(func, t0, y0, K, order, rtol, atol, norm, f0=None):
     """Empirically select a good initial step.
 
     The algorithm is described in [1]_.
@@ -63,8 +63,10 @@ def _select_initial_step(func, t0, y0, order, rtol, atol, norm, f0=None):
         h0 = 0.01 * d0 / d1
 
     y1 = y0 + h0 * f0
-    f1 = func(t0 + h0, y1)
-
+    integro = y0*K[-1]*h0
+    # print('integro: ', integro[0,1])
+    f1 = func(t0 + h0, y1, integro[0,1])
+    # print('f1', f1)
     d2 = norm((f1 - f0) / scale) / h0
 
     if d1 <= 1e-15 and d2 <= 1e-15:

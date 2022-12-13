@@ -39,8 +39,8 @@ class _UncheckedAssign(torch.autograd.Function):
 
 
 
-def integration(solution, K, t, j):
-    print('sdfsfdsfsf', solution.shape, K.shape)
+def integration(solution, K, t_, t, j):
+    # print('sdfsfdsfsf', solution.shape, K.shape)
     
     S, I, R = torch.split(solution, 1, dim=2)
     # https://discuss.pytorch.org/t/one-of-the-variables-required-has-been-modified-by-inplace-operation/104328
@@ -49,15 +49,17 @@ def integration(solution, K, t, j):
     
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     
-    dt_new = .01
-    points_to_interp = [torch.arange(0, t[j], dt_new).to(device)]
+    dt_new = .01 #(t_[j]/100).item() #
+    # print(t_[j].item(), dt_new)
+    points_to_interp = [torch.arange(0, t_[j].item(), dt_new).to(device)]
+    # print('points: ', points_to_interp)
     K_inv = torch.flip(K, dims=(0,))#.clone()
     K_inter = RegularGridInterpolator([t], K_inv.flatten()) ####should be inversed ????????
     K_new = K_inter(points_to_interp)
     K_new = torch.flip(K_new, dims=(0,))
     # print('fffasdf', K_new)
     # print(t[:j].shape, I.shape)
-    I_inter = RegularGridInterpolator([t[:j]], I.flatten())
+    I_inter = RegularGridInterpolator([t_[:j]], I.flatten())
     I_new = I_inter(points_to_interp)
     # print('asdfasdfasdf')
     # print(I_new[:10], I[0,:10,0])
@@ -109,8 +111,13 @@ def _runge_kutta_step(func, y0, f0, t0, dt, t1, solution, K, t, j, tableau):
             ti = t0 + alpha_i * dt
             perturb = Perturb.NONE
         yi = y0 + torch.sum(k[..., :i + 1] * (beta_i * dt), dim=-1).view_as(f0)
-        integro = integration(solution, K, t, j)
-        print('integro', integro)
+        
+        t_ = t.clone()
+        # print(t_)
+        t_[j] = ti
+        # print(j,t_[j],t_)
+        integro = integration(solution, K, t_, t, j)
+        # print('integro', integro)
         
         f = func(ti, yi, integro, perturb=perturb)
         k = _UncheckedAssign.apply(k, f, (..., i + 1))
