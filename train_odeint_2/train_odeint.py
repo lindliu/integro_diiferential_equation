@@ -39,11 +39,11 @@ class Memory(nn.Module):
         
         for m in self.memory.modules():
             if isinstance(m, nn.Linear):
-                nn.init.normal_(m.weight, mean=0, std=0.1)
+                nn.init.normal_(m.weight, mean=0, std=0.01)
                 nn.init.constant_(m.bias, val=0)
                 
         
-        self.mu = nn.Parameter(torch.tensor(4.5).to(device), requires_grad=True)  ## initial value matters, if we choose 1.5 then it fails
+        self.mu = nn.Parameter(torch.tensor(5.).to(device), requires_grad=True)  ## initial value matters, if we choose 1.5 then it fails
         self.sigma = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)
         
     # def forward(self, t):
@@ -55,10 +55,10 @@ class Memory(nn.Module):
 
 # Erlange = False
 # if Erlange==True:    
-#     t = torch.linspace(0., 15, 100).to(device)
+#     t = torch.linspace(0., 15, 1000).to(device)
 #     dist = np.load('../data/dist_l.npy')
 # else:
-#     t = torch.linspace(0., 25, 100).to(device)
+#     t = torch.linspace(0., 15, 100).to(device)
 #     dist = np.load('../data/dist_l_norm.npy')
 
 # dist = torch.tensor(dist, dtype=torch.float32).to(device)
@@ -111,7 +111,7 @@ class ODEFunc(nn.Module):
                 
         self.beta = 2.3
         self.gamma = 1
-        # self.beta = nn.Parameter(torch.tensor(1.8).to(device), requires_grad=True)  ## initial value matters, if we choose 1.5 then it fails
+        # self.beta = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)  ## initial value matters, if we choose 1.5 then it fails
         # self.gamma = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)
         
     def forward(self, t, y, integro):
@@ -145,7 +145,7 @@ if __name__ == '__main__':
     if Erlang==True:
         data = np.load('../data/train_sir_l.npy')
         dist = np.load('../data/dist_l.npy')
-        t = torch.linspace(0., 15, 100).to(device)
+        t = torch.linspace(0., 15, 1000).to(device)
     else:
         data = np.load('../data/train_sir_l_norm.npy')
         dist = np.load('../data/dist_l_norm.npy')
@@ -155,7 +155,7 @@ if __name__ == '__main__':
     t = t[::k]
     data = data[:, ::k, :]
     
-    method = 'dopri5' ## 'euler'##
+    method = 'dopri5' ## 'euler'
     # data = np.load('../data/train_sir.npy')
     # k = 5
     # t = torch.linspace(0., 80./k, 200//k).to(device)
@@ -195,14 +195,7 @@ if __name__ == '__main__':
         pred_y = odeint(func, func_m, batch_y0, batch_t, method=method).to(device)
         # pred_y = odeint(func, func_m, batch_y0, batch_t, method='euler').to(device)
         pred_y = pred_y.transpose(1,0)
-        
-        # loss = torch.mean(torch.abs(pred_y - batch_y))
-        
-        pred_I = pred_y[:,:,1]
-        batch_I = batch_y[:,:,1]
-        loss = torch.mean(torch.abs(pred_I - batch_I))
-
-        
+        loss = torch.mean(torch.abs(pred_y - batch_y))
         loss.backward()
         optimizer.step()
         

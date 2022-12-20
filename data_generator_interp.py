@@ -104,7 +104,7 @@ def f_SIR(y, t, dt, beta=1.5, gamma=1):
     t = np.r_[t,t[-1]+dt]
     # integro = integrate(pre, t, dist)
     integro = integrate_real(pre, t, K)
-    
+    # print(integro)
     S, I, R = y[-1]
     
     dSdt = -beta * S * I + integro
@@ -124,7 +124,7 @@ Erlang = False
 
 if Erlang==True:
     ##### Erlang distribution #####
-    length = 1000
+    length = 100
     end = 15
     t = np.linspace(0., end, length)
     dt = t[1]-t[0]
