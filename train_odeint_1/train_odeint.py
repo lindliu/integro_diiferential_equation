@@ -109,10 +109,10 @@ class ODEFunc(nn.Module):
                 nn.init.normal_(m.weight, mean=0, std=0.01)
                 nn.init.constant_(m.bias, val=0)
                 
-        self.beta = 2.3
-        self.gamma = 1
-        # self.beta = nn.Parameter(torch.tensor(1.8).to(device), requires_grad=True)  ## initial value matters, if we choose 1.5 then it fails
-        # self.gamma = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)
+        # self.beta = 2.3
+        # self.gamma = 1
+        self.beta = nn.Parameter(torch.tensor(1.8).to(device), requires_grad=True)  ## initial value matters, if we choose 1.5 then it fails
+        self.gamma = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)
         
     def forward(self, t, y, integro):
         S, I, R = torch.split(y,1,dim=1)
@@ -150,12 +150,18 @@ if __name__ == '__main__':
         data = np.load('../data/train_sir_l_norm.npy')
         dist = np.load('../data/dist_l_norm.npy')
         t = torch.linspace(0., 25, 100).to(device)
-
+        
     k = 1
     t = t[::k]
     data = data[:, ::k, :]
     
-    method = 'dopri5' ## 'euler'##
+    
+    prediction = True
+    if prediction==True:
+        t = t[:40]
+        data = data[:,:40, :]
+    
+    method = 'euler'##'dopri5' ## 
     # data = np.load('../data/train_sir.npy')
     # k = 5
     # t = torch.linspace(0., 80./k, 200//k).to(device)
@@ -172,7 +178,8 @@ if __name__ == '__main__':
     plt.legend()
     
     
-    
+    # func_m.sigma = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)
+
     # optimizer = optim.Adam(func.parameters(), lr=1e-3)
     optimizer = optim.Adam([
                     {'params': func.parameters()},
@@ -196,11 +203,14 @@ if __name__ == '__main__':
         # pred_y = odeint(func, func_m, batch_y0, batch_t, method='euler').to(device)
         pred_y = pred_y.transpose(1,0)
         
-        # loss = torch.mean(torch.abs(pred_y - batch_y))
-        
-        pred_I = pred_y[:,:,1]
-        batch_I = batch_y[:,:,1]
-        loss = torch.mean(torch.abs(pred_I - batch_I))
+    
+        only_I = True        
+        if only_I==False:
+            loss = torch.mean(torch.abs(pred_y - batch_y))
+        else:
+            pred_I = pred_y[:,:,1]
+            batch_I = batch_y[:,:,1]
+            loss = torch.mean(torch.abs(pred_I - batch_I))
 
         
         loss.backward()
@@ -237,6 +247,11 @@ if __name__ == '__main__':
     # func_m.load_state_dict(torch.load(f'../models/func_m_{device.type}.pt'))
     # func.load_state_dict(torch.load(f'../models/func_{device.type}.pt'))
 
+    
+    if prediction==True:
+        t = torch.linspace(0., 25, 100).to(device)
+        batch_t = t
+        data = np.load('../data/train_sir_l_norm.npy')
 
     idx = np.random.choice(np.arange(data.shape[0]),batch_size)
     batch_y = torch.tensor(data[idx, ...], dtype=torch.float32).to(device)
