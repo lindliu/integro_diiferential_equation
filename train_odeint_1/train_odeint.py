@@ -111,7 +111,7 @@ class ODEFunc(nn.Module):
                 
         # self.beta = 2.3
         # self.gamma = 1
-        self.beta = nn.Parameter(torch.tensor(1.8).to(device), requires_grad=True)  ## initial value matters, if we choose 1.5 then it fails
+        self.beta = nn.Parameter(torch.tensor(2.0).to(device), requires_grad=True)  ## initial value matters, if we choose 1.5 then it fails
         self.gamma = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)
         
     def forward(self, t, y, integro):
@@ -119,9 +119,9 @@ class ODEFunc(nn.Module):
         # print('asfafasfasfsafasfd', I.shape, integro.shape)
 
         dSdt = -self.beta * S * I + integro
-        dIdt = self.beta * S * I - self.gamma * I
-        # dIdt = self.NN(torch.cat((S,R),1))
-        dRdt = self.gamma * I - integro#- self.memory(I)#sum(pre*dist)*dx
+        # dIdt = self.beta * S * I - self.gamma * I
+        dIdt = self.NN(torch.cat((S,R),1))
+        dRdt = self.gamma * I - integro
         
         # print('asdf', integro)
         return torch.cat((dSdt,dIdt,dRdt),1)
@@ -161,7 +161,7 @@ if __name__ == '__main__':
         t = t[:40]
         data = data[:,:40, :]
     
-    method = 'euler'##'dopri5' ## 
+    method = 'euler'##'dopri5' ##
     # data = np.load('../data/train_sir.npy')
     # k = 5
     # t = torch.linspace(0., 80./k, 200//k).to(device)
@@ -178,13 +178,6 @@ if __name__ == '__main__':
     plt.legend()
     
     
-    # func_m.sigma = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)
-
-    # optimizer = optim.Adam(func.parameters(), lr=1e-3)
-    optimizer = optim.Adam([
-                    {'params': func.parameters()},
-                    {'params': func_m.parameters(), 'lr': 1e-3}
-                ], lr=1e-4)
     
     batch_size = 1
     batch = data
@@ -192,37 +185,68 @@ if __name__ == '__main__':
     batch_y0 = batch_y[:,0,:].to(device)
     
     batch_t = t
-    for itr in range(1, 30000):
-        # idx = np.random.choice(np.arange(data.shape[0]),batch_size)
-        idx = np.array([0])
-        batch_y = torch.tensor(data[idx, ...], dtype=torch.float32).to(device)
-        batch_y0 = batch_y[:,0,:].to(device)
-
-        optimizer.zero_grad()
-        pred_y = odeint(func, func_m, batch_y0, batch_t, method=method).to(device)
-        # pred_y = odeint(func, func_m, batch_y0, batch_t, method='euler').to(device)
-        pred_y = pred_y.transpose(1,0)
-        
     
+    from hyper import hyper_min, hyper_min_1
+    for kk in range(10):
         only_I = True        
-        if only_I==False:
-            loss = torch.mean(torch.abs(pred_y - batch_y))
-        else:
-            pred_I = pred_y[:,:,1]
-            batch_I = batch_y[:,:,1]
-            loss = torch.mean(torch.abs(pred_I - batch_I))
 
+        if kk!=0:
+            print(f'mu: {func_m.mu.item()}, sigma: {func_m.sigma.item()}')
+            ### hyperopt
+            best = hyper_min(func, func_m, batch_t, batch_y, method, only_I)
+            sigma, mu = best['sigma'], best['mu']
+            func_m.sigma = nn.Parameter(torch.tensor(sigma).to(device), requires_grad=True)
+            func_m.mu = nn.Parameter(torch.tensor(mu).to(device), requires_grad=True)
         
-        loss.backward()
-        optimizer.step()
+            # best = hyper_min_1(func, func_m, batch_t, batch_y, method)
+            # sigma, mu, beta, gamma = best['sigma'], best['mu'], best['beta'], best['gamma']
+            # func_m.sigma = nn.Parameter(torch.tensor(sigma).to(device), requires_grad=True)
+            # func_m.mu = nn.Parameter(torch.tensor(mu).to(device), requires_grad=True)
+            # func.beta = nn.Parameter(torch.tensor(beta).to(device), requires_grad=True)
+            # func.gamma = nn.Parameter(torch.tensor(gamma).to(device), requires_grad=True)
         
-        if itr%1==0:
-            print(f'itr: {itr}, loss: {loss.item():.6f}')
-            try:
-                print(f'beta: {func.beta.item():.3f}, gamma: {func.gamma.item():.3f}')
-            except:
-                continue
+        
+        # func_m.sigma = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)
+        # optimizer = optim.Adam(func.parameters(), lr=1e-3)
+        optimizer = optim.Adam([
+                        {'params': func.parameters()},
+                        {'params': func_m.parameters(), 'lr': 1e-3}
+                    ], lr=1e-4)
+        
+        for itr in range(1, 2000):
+            # idx = np.random.choice(np.arange(data.shape[0]),batch_size)
+            idx = np.array([0])
+            batch_y = torch.tensor(data[idx, ...], dtype=torch.float32).to(device)
+            batch_y0 = batch_y[:,0,:].to(device)
+    
+            optimizer.zero_grad()
+            pred_y = odeint(func, func_m, batch_y0, batch_t, method=method).to(device)
+            # pred_y = odeint(func, func_m, batch_y0, batch_t, method='euler').to(device)
+            pred_y = pred_y.transpose(1,0)
             
+        
+            if only_I==False:
+                loss = torch.mean(torch.abs(pred_y - batch_y))
+            else:
+                pred_I = pred_y[:,:,1]
+                batch_I = batch_y[:,:,1]
+                loss = torch.mean(torch.abs(pred_I - batch_I))
+    
+            
+            loss.backward()
+            optimizer.step()
+            
+            if itr%100==0:
+                print(f'itr: {itr}, loss: {loss.item():.6f}')
+                try:
+                    print(f'beta: {func.beta.item():.3f}, gamma: {func.gamma.item():.3f}')
+                except:
+                    continue
+            
+    
+    
+    
+    
     ## unknown dist; unknown dIdt as neural network; known gamma beta
     torch.save(func_m.state_dict(), f'../models/func_m_N_{device.type}.pt') ### train 1800 iters, loss=0.001
     torch.save(func.state_dict(), f'../models/func_N_{device.type}.pt')
