@@ -138,7 +138,7 @@ class ODEFunc(nn.Module):
                 
         # self.beta = 2.3
         # self.gamma = 1
-        self.beta = nn.Parameter(torch.tensor(2.0).to(device), requires_grad=True)  ## initial value matters, if we choose 1.5 then it fails
+        self.beta = nn.Parameter(torch.tensor(2.3).to(device), requires_grad=True)  ## initial value matters, if we choose 1.5 then it fails
         self.gamma = nn.Parameter(torch.tensor(1.).to(device), requires_grad=True)
         
         self.S0 = nn.Parameter(torch.tensor(.9).to(device), requires_grad=True)
@@ -175,24 +175,26 @@ if __name__ == '__main__':
     Erlang = False
     
     if Erlang==True:
-        data = np.load('../data/train_sir_l.npy')
+        data_ = np.load('../data/train_sir_l.npy')
         dist = np.load('../data/dist_l.npy')
         t = torch.linspace(0., 15, 100).to(device)
     else:
-        data = np.load('../data/train_sir_l_norm.npy') + np.random.randn(100,3)*0.02
-        # data = np.load('../data/train_sir_l_norm.npy')
+        data_ = np.load('../data/nn.npy')
+        data_ = data_[0:500:5].reshape([1,-1,1])*10
+        data_ = np.repeat(data_,3,axis=2)
         dist = np.load('../data/dist_l_norm.npy')
         t = torch.linspace(0., 25, 100).to(device)
-        
+    
     k = 1
     t = t[::k]
-    data = data[:, ::k, :]
+    data_ = data_[:, ::k, :]
     
     
     prediction = True
     if prediction==True:
-        t = t[:40]
-        data = data[:,:40, :]
+        num = 40
+        t = t[:num]
+        data = data_[:,:num, :]
     
     method = 'euler'##'dopri5' ##
     # data = np.load('../data/train_sir.npy')
@@ -233,7 +235,7 @@ if __name__ == '__main__':
             # sigma, mu = best['sigma'], best['mu']
             # func_m.sigma = nn.Parameter(torch.tensor(sigma).to(device), requires_grad=True)
             # func_m.mu = nn.Parameter(torch.tensor(mu).to(device), requires_grad=True)
-            
+        
             # best = hyper_min_1(func, func_m, batch_t, batch_y, method)
             # sigma, mu, beta, gamma = best['sigma'], best['mu'], best['beta'], best['gamma']
             # func_m.sigma = nn.Parameter(torch.tensor(sigma).to(device), requires_grad=True)
@@ -241,7 +243,7 @@ if __name__ == '__main__':
             # func.beta = nn.Parameter(torch.tensor(beta).to(device), requires_grad=True)
             # func.gamma = nn.Parameter(torch.tensor(gamma).to(device), requires_grad=True)
             
-            best = hyper_min_2(c_func, c_func_m, batch_t, batch_y, method, max_evals=500)
+            best = hyper_min_2(c_func, c_func_m, batch_t, batch_y, method, max_evals=100)
             sigma, mu, beta, gamma, S0 = best['sigma'], best['mu'], best['beta'], best['gamma'], best['S0']
             func_m.sigma = nn.Parameter(torch.tensor(sigma).to(device), requires_grad=True)
             func_m.mu = nn.Parameter(torch.tensor(mu).to(device), requires_grad=True)
@@ -324,9 +326,9 @@ if __name__ == '__main__':
         t = torch.linspace(0., 25, 100).to(device)
         # data = np.load('../data/train_sir_l_norm.npy')
 
-    idx = np.random.choice(np.arange(data.shape[0]),batch_size)
-    batch_y = torch.tensor(data[idx, ...], dtype=torch.float32).to(device)
-    batch_y0 = batch_y[:,0,:].to(device)
+    # idx = np.random.choice(np.arange(data.shape[0]),batch_size)
+    # batch_y = torch.tensor(data[idx, ...], dtype=torch.float32).to(device)
+    # batch_y0 = batch_y[:,0,:].to(device)
     
     
     # func.S0 = nn.Parameter(torch.tensor(S0).to(device), requires_grad=True)
@@ -335,12 +337,14 @@ if __name__ == '__main__':
 
 
     pred_y = odeint(func, func_m, batch_y0, t, method=method).to(device)
-    # pred_y = odeint(func, func_m, batch_y0, t, method='euler').to(device)
+    # pred_y = odeint(func, func_m, batch_y0, batch_t, method='euler').to(device)
     pred_y = pred_y.transpose(1,0)
     
     fig, ax = plt.subplots(1,2,figsize=(10,4))
-    ax[0].plot(pred_y[0].detach().cpu())
-    ax[0].plot(batch_y[0].detach().cpu())
+    # ax[0].plot(pred_y[0].detach().cpu())
+    ax[0].plot(pred_y[0,:,1].detach().cpu())
+    ax[0].plot(data_[0,:,0])
+    ax[0].plot(batch_y[0,:,1].detach().cpu())
 
     
 

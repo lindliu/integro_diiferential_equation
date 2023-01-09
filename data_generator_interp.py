@@ -97,7 +97,7 @@ def integrate(pre, t, dist):
     return sum(new_y*new_gamma)*new_dt
 
 
-def f_SIR(y, t, dt, beta=1.5, gamma=1):
+def f_SIR(y, t, dt, K, beta=1.5, gamma=1):
     pre = y[:,1]
     
     pre = np.r_[pre, pre[-1]]
@@ -168,7 +168,7 @@ for j in range(batch):
     SIR_f[0,:] = np.array([[S0, I0, R0]])
     
     for i in range(SIR_f.shape[0]-1):
-        SIR_f[[i+1]] = SIR_f[[i]] + f_SIR(SIR_f[:i+1,:], t[:i+1], dt, beta, gamma)*dt
+        SIR_f[[i+1]] = SIR_f[[i]] + f_SIR(SIR_f[:i+1,:], t[:i+1], dt, K, beta, gamma)*dt
     
     SIR_batch[j,...] = SIR_f
 
